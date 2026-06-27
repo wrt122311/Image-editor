@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>手机图片编辑</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #20242a;
+        --muted: #737982;
+        --line: #e4e7eb;
+        --soft: #f5f6f7;
+        --accent: #16745f;
+        --danger: #b42318;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background: #fff;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(16px);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      main {
+        padding: 14px 14px calc(140px + env(safe-area-inset-bottom));
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .images {
+        display: grid;
+        gap: 12px;
+      }
+
+      .slot {
+        min-height: 260px;
+        display: grid;
+        place-items: center;
+        padding: 12px;
+        background:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px),
+          #fff;
+        background-size: 120px 120px;
+      }
+
+      .slot img {
+        max-width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+        border-radius: 10px;
+      }
+
+      .placeholder {
+        color: var(--muted);
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      .refs {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+        gap: 8px;
+        width: 100%;
+      }
+
+      .thumb {
+        position: relative;
+        min-height: 104px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .thumb img {
+        width: 100%;
+        height: 112px;
+        object-fit: contain;
+      }
+
+      .badge,
+      .remove {
+        position: absolute;
+        top: 6px;
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border: 0;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.72);
+        font-weight: 760;
+      }
+
+      .badge {
+        left: 6px;
+      }
+
+      .remove {
+        right: 6px;
+        padding: 0;
+      }
+
+      .composer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 20;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(16px);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 68px;
+        max-height: 160px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--ink);
+        outline: none;
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      button,
+      select,
+      input {
+        font: inherit;
+      }
+
+      button,
+      select {
+        min-height: 40px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 12px;
+        background: var(--soft);
+        color: var(--ink);
+      }
+
+      .send {
+        margin-left: auto;
+        min-width: 56px;
+        color: #fff;
+        background: var(--accent);
+        font-weight: 760;
+      }
+
+      .send:disabled {
+        opacity: 0.55;
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .settings {
+        position: fixed;
+        inset: auto 10px calc(126px + env(safe-area-inset-bottom)) 10px;
+        z-index: 30;
+        max-height: 62vh;
+        overflow: auto;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 18px 50px rgba(23, 30, 38, 0.18);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      .row label {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .row input,
+      .row select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .key-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
+      .timer {
+        margin: 10px 0;
+        color: #111820;
+        font-size: 18px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .message {
+        min-height: 22px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .message.error {
+        color: var(--danger);
+      }
+
+      .download {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        border-radius: 999px;
+        padding: 0 14px;
+        color: #fff;
+        background: var(--accent);
+        text-decoration: none;
+        font-weight: 760;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>手机图片编辑</h1>
+    </header>
+
+    <main>
+      <section class="images">
+        <div class="panel slot">
+          <div class="placeholder" id="inputPlaceholder">选择或拍摄参考图</div>
+          <div class="refs" id="inputList" hidden></div>
+        </div>
+        <div class="timer" id="timer" hidden>正在编辑图片... 已用 0.0 秒</div>
+        <div class="panel slot">
+          <div class="placeholder" id="resultPlaceholder">结果会显示在这里</div>
+          <img id="resultImage" alt="编辑结果" hidden />
+        </div>
+        <a class="download" id="downloadLink" href="#" download="edited-image.png" hidden>下载结果</a>
+        <div class="message" id="message"></div>
+      </section>
+    </main>
+
+    <section class="settings" id="settings" hidden>
+      <div class="row">
+        <label for="provider">服务</label>
+        <select id="provider">
+          <option value="yunwu" selected>第三方 OpenAI</option>
+          <option value="openai">OpenAI</option>
+          <option value="xai">xAI / Grok</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="apiKey">当前服务 API key</label>
+        <div class="key-row">
+          <input id="apiKey" type="password" autocomplete="off" placeholder="sk- 或 xai-..." />
+          <button type="button" id="saveKey">保存</button>
+        </div>
+      </div>
+
+      <div class="row" id="baseUrlRow">
+        <label for="baseUrl">第三方 Base URL</label>
+        <input id="baseUrl" type="url" value="https://api.zhongzhuan.chat/v1" />
+      </div>
+
+      <div class="row openai-setting">
+        <label for="openaiModel">OpenAI 模型</label>
+        <select id="openaiModel">
+          <option value="gpt-image-2">gpt-image-2</option>
+        </select>
+      </div>
+
+      <div class="row grok-setting" hidden>
+        <label for="grokModel">Grok 模型</label>
+        <select id="grokModel">
+          <option value="grok-imagine-image-quality">grok-imagine-image-quality</option>
+          <option value="grok-imagine-image">grok-imagine-image</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="count">数量</label>
+        <select id="count">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </div>
+
+      <div class="row openai-setting">
+        <label for="size">OpenAI size</label>
+        <select id="size">
+          <option value="auto">auto</option>
+          <option value="1024x1024">1024x1024</option>
+          <option value="1536x1024">1536x1024</option>
+          <option value="1024x1536" selected>1024x1536</option>
+          <option value="2048x2048">2048x2048</option>
+          <option value="2048x1152">2048x1152</option>
+          <option value="3840x2160">3840x2160</option>
+          <option value="2160x3840">2160x3840</option>
+        </select>
+      </div>
+
+      <div class="row openai-setting">
+        <label for="quality">OpenAI quality</label>
+        <select id="quality">
+          <option value="auto">auto</option>
+          <option value="high">high</option>
+          <option value="medium" selected>medium</option>
+          <option value="low">low</option>
+        </select>
+      </div>
+
+      <div class="row openai-setting">
+        <label for="outputFormat">OpenAI output format</label>
+        <select id="outputFormat">
+          <option value="png" selected>PNG</option>
+          <option value="jpeg">JPEG</option>
+          <option value="webp">WEBP</option>
+        </select>
+      </div>
+
+      <div class="row openai-setting">
+        <label for="background">OpenAI background</label>
+        <select id="background">
+          <option value="auto" selected>auto</option>
+          <option value="transparent">transparent</option>
+          <option value="opaque">opaque</option>
+        </select>
+      </div>
+
+      <div class="row openai-setting">
+        <label for="moderation">OpenAI moderation</label>
+        <select id="moderation">
+          <option value="low" selected>low</option>
+          <option value="auto">auto</option>
+        </select>
+      </div>
+
+      <div class="row grok-setting" hidden>
+        <label for="resolution">Grok resolution</label>
+        <select id="resolution">
+          <option value="1k" selected>1k</option>
+          <option value="2k">2k</option>
+        </select>
+      </div>
+
+      <div class="row grok-setting" hidden>
+        <label for="aspectRatio">Grok aspect ratio</label>
+        <select id="aspectRatio">
+          <option value="1:1" selected>1:1</option>
+          <option value="3:4">3:4</option>
+          <option value="4:3">4:3</option>
+          <option value="9:16">9:16</option>
+          <option value="16:9">16:9</option>
+          <option value="2:3">2:3</option>
+          <option value="3:2">3:2</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="composer">
+      <textarea id="prompt" placeholder="输入图片编辑提示词..."></textarea>
+      <div class="bar">
+        <input class="file-input" id="imageFile" type="file" accept="image/*" multiple />
+        <button type="button" id="pickImage">图片</button>
+        <button type="button" id="clearImages">清空</button>
+        <button type="button" id="toggleSettings">设置</button>
+        <button type="button" class="send" id="send">生成</button>
+      </div>
+    </section>
+
+    <script>
+      const state = {
+        images: [],
+        timerId: null,
+        startedAt: 0,
+      };
+
+      const els = {
+        provider: document.querySelector("#provider"),
+        apiKey: document.querySelector("#apiKey"),
+        baseUrl: document.querySelector("#baseUrl"),
+        saveKey: document.querySelector("#saveKey"),
+        settings: document.querySelector("#settings"),
+        toggleSettings: document.querySelector("#toggleSettings"),
+        file: document.querySelector("#imageFile"),
+        pickImage: document.querySelector("#pickImage"),
+        clearImages: document.querySelector("#clearImages"),
+        inputList: document.querySelector("#inputList"),
+        inputPlaceholder: document.querySelector("#inputPlaceholder"),
+        prompt: document.querySelector("#prompt"),
+        send: document.querySelector("#send"),
+        timer: document.querySelector("#timer"),
+        resultImage: document.querySelector("#resultImage"),
+        resultPlaceholder: document.querySelector("#resultPlaceholder"),
+        message: document.querySelector("#message"),
+        downloadLink: document.querySelector("#downloadLink"),
+        openaiModel: document.querySelector("#openaiModel"),
+        grokModel: document.querySelector("#grokModel"),
+        count: document.querySelector("#count"),
+        size: document.querySelector("#size"),
+        quality: document.querySelector("#quality"),
+        outputFormat: document.querySelector("#outputFormat"),
+        background: document.querySelector("#background"),
+        moderation: document.querySelector("#moderation"),
+        resolution: document.querySelector("#resolution"),
+        aspectRatio: document.querySelector("#aspectRatio"),
+      };
+
+      function storageKey(provider) {
+        return `mobile_image_key_${provider}`;
+      }
+
+      function setMessage(text, isError = false) {
+        els.message.textContent = text;
+        els.message.classList.toggle("error", isError);
+      }
+
+      function getLimit() {
+        return els.provider.value === "xai" ? 3 : 10;
+      }
+
+      function formatElapsed(ms) {
+        return `${(ms / 1000).toFixed(1)} 秒`;
+      }
+
+      function startTimer() {
+        stopTimer();
+        state.startedAt = performance.now();
+        els.timer.hidden = false;
+        els.timer.textContent = "正在编辑图片... 已用 0.0 秒";
+        state.timerId = window.setInterval(() => {
+          els.timer.textContent = `正在编辑图片... 已用 ${formatElapsed(performance.now() - state.startedAt)}`;
+        }, 100);
+      }
+
+      function stopTimer(label) {
+        if (state.timerId) {
+          clearInterval(state.timerId);
+          state.timerId = null;
+        }
+        if (label) {
+          els.timer.hidden = false;
+          els.timer.textContent = `${label}，用时 ${formatElapsed(performance.now() - state.startedAt)}`;
+        }
+      }
+
+      function renderInputs() {
+        els.inputList.innerHTML = "";
+        if (!state.images.length) {
+          els.inputList.hidden = true;
+          els.inputPlaceholder.hidden = false;
+          return;
+        }
+
+        state.images.forEach((src, index) => {
+          const wrap = document.createElement("div");
+          wrap.className = "thumb";
+          const img = document.createElement("img");
+          img.src = src;
+          const badge = document.createElement("div");
+          badge.className = "badge";
+          badge.textContent = index + 1;
+          const remove = document.createElement("button");
+          remove.className = "remove";
+          remove.type = "button";
+          remove.textContent = "×";
+          remove.addEventListener("click", () => {
+            state.images.splice(index, 1);
+            renderInputs();
+          });
+          wrap.append(img, badge, remove);
+          els.inputList.appendChild(wrap);
+        });
+        els.inputList.hidden = false;
+        els.inputPlaceholder.hidden = true;
+      }
+
+      function readFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error(`读取失败：${file.name}`));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function addFiles(files) {
+        const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+        const limit = getLimit();
+        const available = Math.max(0, limit - state.images.length);
+        const accepted = imageFiles.slice(0, available);
+        if (!accepted.length) {
+          setMessage(`当前服务最多支持 ${limit} 张图片。`, true);
+          return;
+        }
+        const dataUrls = await Promise.all(accepted.map(readFile));
+        state.images.push(...dataUrls);
+        renderInputs();
+        setMessage(`已加入 ${accepted.length} 张图片，共 ${state.images.length} 张。`);
+      }
+
+      function syncProviderUI() {
+        const isGrok = els.provider.value === "xai";
+        document.querySelectorAll(".openai-setting").forEach((node) => (node.hidden = isGrok));
+        document.querySelectorAll(".grok-setting").forEach((node) => (node.hidden = !isGrok));
+        document.querySelector("#baseUrlRow").hidden = els.provider.value !== "yunwu";
+        els.apiKey.value = localStorage.getItem(storageKey(els.provider.value)) || "";
+        els.baseUrl.value = localStorage.getItem("mobile_yunwu_base_url") || "https://api.zhongzhuan.chat/v1";
+        const limit = getLimit();
+        if (state.images.length > limit) {
+          setMessage(`当前服务最多支持 ${limit} 张图片，请删除多余图片。`, true);
+        }
+      }
+
+      function dataUrlToBlob(dataUrl) {
+        const [meta, base64] = dataUrl.split(",");
+        const mime = /data:([^;]+)/.exec(meta)?.[1] || "image/png";
+        const bytes = atob(base64);
+        const array = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i += 1) array[i] = bytes.charCodeAt(i);
+        return new Blob([array], { type: mime });
+      }
+
+      async function callOpenAICompatible(endpoint, key) {
+        const form = new FormData();
+        state.images.forEach((src, index) => {
+          const blob = dataUrlToBlob(src);
+          form.append("image", blob, `input-${index + 1}.${blob.type.includes("webp") ? "webp" : blob.type.includes("jpeg") ? "jpg" : "png"}`);
+        });
+        form.append("prompt", els.prompt.value.trim());
+        form.append("model", els.openaiModel.value);
+        form.append("n", els.count.value);
+        form.append("size", els.size.value);
+        form.append("quality", els.quality.value);
+        form.append("output_format", els.outputFormat.value);
+        form.append("background", els.background.value);
+        form.append("moderation", els.moderation.value);
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}` },
+          body: form,
+        });
+        const data = await response.json().catch(async () => ({ raw: await response.text() }));
+        if (!response.ok) throw new Error(data.error?.message || data.error || data.message || data.raw || "请求失败");
+        return data;
+      }
+
+      async function callXai(key) {
+        const imagePayloads = state.images.map((src) => ({ url: src, type: "image_url" }));
+        const body = {
+          model: els.grokModel.value,
+          prompt: els.prompt.value.trim(),
+          n: Number(els.count.value),
+          resolution: els.resolution.value,
+          aspect_ratio: els.aspectRatio.value,
+        };
+        if (imagePayloads.length === 1) body.image = imagePayloads[0];
+        else body.images = imagePayloads;
+
+        const response = await fetch("https://api.x.ai/v1/images/edits", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json().catch(async () => ({ raw: await response.text() }));
+        if (!response.ok) throw new Error(data.error?.message || data.error || data.message || data.raw || "请求失败");
+        return data;
+      }
+
+      function showResult(data) {
+        const first = data.data?.[0];
+        if (!first) throw new Error("返回中没有图片。");
+        let url = first.url;
+        if (!url && first.b64_json) {
+          url = `data:image/${els.outputFormat.value || "png"};base64,${first.b64_json}`;
+        }
+        if (!url) throw new Error("返回中没有图片 URL 或 base64。");
+        els.resultImage.src = url;
+        els.resultImage.hidden = false;
+        els.resultPlaceholder.hidden = true;
+        els.downloadLink.href = url;
+        els.downloadLink.hidden = false;
+      }
+
+      els.toggleSettings.addEventListener("click", () => {
+        els.settings.hidden = !els.settings.hidden;
+      });
+      els.provider.addEventListener("change", syncProviderUI);
+      els.saveKey.addEventListener("click", () => {
+        localStorage.setItem(storageKey(els.provider.value), els.apiKey.value.trim());
+        if (els.provider.value === "yunwu") {
+          localStorage.setItem("mobile_yunwu_base_url", els.baseUrl.value.trim().replace(/\/+$/, ""));
+        }
+        setMessage("已保存到手机浏览器本地。");
+      });
+      els.pickImage.addEventListener("click", () => els.file.click());
+      els.file.addEventListener("change", () => addFiles(els.file.files));
+      els.clearImages.addEventListener("click", () => {
+        state.images = [];
+        renderInputs();
+        els.resultImage.hidden = true;
+        els.resultPlaceholder.hidden = false;
+        els.downloadLink.hidden = true;
+      });
+
+      els.send.addEventListener("click", async () => {
+        const provider = els.provider.value;
+        const key = localStorage.getItem(storageKey(provider)) || els.apiKey.value.trim();
+        if (!key) {
+          setMessage("请先在设置里保存当前服务的 API key。", true);
+          els.settings.hidden = false;
+          return;
+        }
+        if (!state.images.length) {
+          setMessage("请先选择图片。", true);
+          return;
+        }
+        if (state.images.length > getLimit()) {
+          setMessage(`当前服务最多支持 ${getLimit()} 张图片。`, true);
+          return;
+        }
+        if (!els.prompt.value.trim()) {
+          setMessage("请输入提示词。", true);
+          return;
+        }
+
+        els.send.disabled = true;
+        els.resultImage.hidden = true;
+        els.resultPlaceholder.hidden = false;
+        els.downloadLink.hidden = true;
+        setMessage("");
+        startTimer();
+        try {
+          let data;
+          if (provider === "xai") {
+            data = await callXai(key);
+          } else {
+            const endpoint =
+              provider === "yunwu"
+                ? `${(localStorage.getItem("mobile_yunwu_base_url") || els.baseUrl.value || "https://api.zhongzhuan.chat/v1").replace(/\/+$/, "")}/images/edits`
+                : "https://api.openai.com/v1/images/edits";
+            data = await callOpenAICompatible(endpoint, key);
+          }
+          showResult(data);
+          stopTimer("编辑完成");
+          setMessage("完成。长按结果图可保存，或点击下载结果。");
+        } catch (error) {
+          stopTimer("编辑失败");
+          setMessage(error.message || "请求失败。可能是浏览器跨域限制或接口拒绝。", true);
+        } finally {
+          els.send.disabled = false;
+        }
+      });
+
+      syncProviderUI();
+    </script>
+  </body>
+</html>

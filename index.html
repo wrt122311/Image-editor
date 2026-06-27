@@ -1,0 +1,1878 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Images</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #24272b;
+        --muted: #767b82;
+        --line: #e6e8eb;
+        --soft: #f6f7f8;
+        --panel: #ffffff;
+        --accent: #16745f;
+        --danger: #b42318;
+        --shadow: 0 16px 44px rgba(22, 28, 35, 0.16);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #fff;
+      }
+
+      .topbar {
+        position: fixed;
+        inset: 0 0 auto 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 72px;
+        padding: 0 48px;
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid var(--line);
+        backdrop-filter: blur(18px);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 36px;
+        line-height: 1;
+        font-weight: 760;
+        letter-spacing: 0;
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      button,
+      select,
+      textarea,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        min-height: 42px;
+        padding: 0 16px;
+        color: var(--ink);
+        background: #f0f2f4;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #e6e9ec;
+      }
+
+      .send {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        padding: 0;
+        color: #fff;
+        background: var(--accent);
+      }
+
+      .send.stop {
+        background: var(--danger);
+      }
+
+      .send:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .stage {
+        min-height: 100vh;
+        padding-top: 72px;
+        padding-bottom: 180px;
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: min(25vw, 460px) min(42vh, 460px);
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(360px, 1fr));
+        grid-auto-rows: minmax(520px, calc(100vh - 252px));
+        width: min(1360px, calc(100vw - 96px));
+        margin: 0 auto;
+        min-height: calc(100vh - 252px);
+      }
+
+      .slot {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        padding: 64px 28px 34px;
+      }
+
+      .slot-label {
+        position: absolute;
+        top: 14px;
+        left: 18px;
+        z-index: 2;
+        color: #30363c;
+        font-size: 15px;
+        font-weight: 720;
+      }
+
+      .slot img {
+        display: block;
+        width: auto;
+        max-width: min(92%, 620px);
+        height: auto;
+        max-height: min(72vh, 760px);
+        object-fit: contain;
+      }
+
+      .slot:has(.timer-display:not([hidden])) img {
+        max-height: min(66vh, 700px);
+        margin-top: 38px;
+      }
+
+      .input-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 12px;
+        width: min(92%, 560px);
+      }
+
+      .thumb {
+        position: relative;
+        min-height: 140px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .thumb img {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: 180px;
+        object-fit: contain;
+      }
+
+      .thumb-index {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.72);
+        font-weight: 760;
+      }
+
+      .thumb-remove {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        min-height: 30px;
+        padding: 0;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.72);
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .thumb-remove:hover {
+        background: rgba(180, 35, 24, 0.9);
+      }
+
+      .placeholder {
+        max-width: 260px;
+        color: #a0a5aa;
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      .timer-display {
+        position: absolute;
+        top: 34px;
+        left: 50%;
+        z-index: 3;
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: calc(100% - 56px);
+        color: #20242a;
+        font-size: 18px;
+        font-weight: 760;
+        line-height: 1.35;
+        text-align: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 6px 18px rgba(22, 28, 35, 0.1);
+      }
+
+      .composer {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        z-index: 30;
+        width: min(1040px, calc(100vw - 40px));
+        transform: translateX(-50%);
+      }
+
+      .prompt-box {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px;
+        padding: 16px 16px 12px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 58px;
+        max-height: 180px;
+        resize: vertical;
+        border: 0;
+        outline: none;
+        color: var(--ink);
+        background: transparent;
+        line-height: 1.55;
+      }
+
+      .toolbar {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .toolbar .spacer {
+        flex: 1;
+      }
+
+      .pill-select {
+        width: auto;
+        min-height: 38px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 12px;
+        color: #50565d;
+        background: transparent;
+        outline: none;
+      }
+
+      input.pill-select {
+        width: min(260px, 28vw);
+        min-width: 170px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .popover {
+        position: absolute;
+        left: 100px;
+        bottom: 84px;
+        z-index: 40;
+        width: 310px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .popover[hidden],
+      .modal-backdrop[hidden],
+      .raw-panel[hidden] {
+        display: none;
+      }
+
+      .menu-group {
+        padding: 18px 18px 10px;
+      }
+
+      .menu-title {
+        margin-bottom: 12px;
+        font-size: 14px;
+        font-weight: 760;
+      }
+
+      .menu-item {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        align-items: center;
+        width: 100%;
+        min-height: 44px;
+        border-radius: 10px;
+        padding: 0 8px;
+        text-align: left;
+        background: transparent;
+      }
+
+      .menu-item.active {
+        font-weight: 760;
+        background: #eeeeef;
+      }
+
+      .advanced-row {
+        width: 100%;
+        border-top: 1px solid var(--line);
+        border-radius: 0;
+        min-height: 58px;
+        padding: 0 22px;
+        text-align: left;
+        background: #fff;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(0, 0, 0, 0.28);
+      }
+
+      .modal {
+        width: min(760px, 100%);
+        max-height: min(760px, calc(100vh - 48px));
+        overflow: auto;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: var(--shadow);
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 24px 28px 10px;
+      }
+
+      .modal-header h2 {
+        margin: 0;
+        font-size: 30px;
+        letter-spacing: 0;
+      }
+
+      .settings-list {
+        padding: 10px 28px 28px;
+      }
+
+      .setting-row {
+        display: grid;
+        grid-template-columns: 1fr minmax(220px, 280px);
+        align-items: center;
+        gap: 24px;
+        min-height: 74px;
+      }
+
+      .setting-row label {
+        font-size: 20px;
+      }
+
+      .setting-row select,
+      .setting-row input {
+        width: 100%;
+        min-height: 48px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0 14px;
+        background: #fff;
+      }
+
+      .key-grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      .message {
+        position: fixed;
+        right: 28px;
+        bottom: 22px;
+        z-index: 29;
+        max-width: 420px;
+        color: var(--muted);
+        font-size: 14px;
+        text-align: right;
+      }
+
+      .message.error {
+        color: var(--danger);
+      }
+
+      .raw-panel {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 31;
+        width: min(520px, calc(100vw - 40px));
+        max-height: 42vh;
+        overflow: auto;
+        margin: 0;
+        padding: 14px;
+        border-radius: 12px;
+        color: #dfe9e5;
+        background: #20292e;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      body:not(.sidebar-collapsed) {
+        margin-left: 280px;
+      }
+
+      body.sidebar-collapsed {
+        margin-left: 0;
+      }
+
+      body.sidebar-collapsed .topbar {
+        padding-left: 56px;
+      }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        background: white;
+        border-right: 1px solid var(--line);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s;
+      }
+
+      .sidebar.collapsed {
+        transform: translateX(-280px);
+      }
+
+      .sidebar-expand {
+        position: fixed;
+        left: 8px;
+        top: 14px;
+        z-index: 101;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--accent);
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+
+      .sidebar-expand:hover {
+        background: #125c4b;
+      }
+
+      .sidebar-header {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        gap: 8px;
+      }
+
+      .sidebar-new {
+        flex: 1;
+        background: var(--accent);
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        min-height: 38px;
+      }
+
+      .sidebar-new:hover {
+        background: #125c4b;
+      }
+
+      .sidebar-toggle {
+        width: 42px;
+        min-height: 38px;
+      }
+
+      .sidebar-search {
+        margin: 0 12px 8px;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 14px;
+        outline: none;
+      }
+
+      .sidebar-search:focus {
+        border-color: var(--accent);
+      }
+
+      .sidebar-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 4px;
+      }
+
+      .sidebar-item {
+        padding: 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        margin-bottom: 2px;
+        position: relative;
+      }
+
+      .sidebar-item:hover {
+        background: #f0f2f4;
+      }
+
+      .sidebar-item.active {
+        background: #e6e8ec;
+      }
+
+      .sidebar-item-title {
+        font-size: 13px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .sidebar-item-meta {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .sidebar-item-thumb {
+        width: 100%;
+        max-height: 200px;
+        object-fit: contain;
+        border-radius: 6px;
+        margin-top: 6px;
+        background: #f6f7f8;
+      }
+
+      .sidebar-item-error {
+        font-size: 11px;
+        color: var(--danger);
+        margin-top: 4px;
+      }
+
+      .sidebar-item-delete {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        min-height: 24px;
+        font-size: 14px;
+        padding: 0;
+        display: none;
+      }
+
+      .sidebar-item:hover .sidebar-item-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sidebar-item-delete:hover {
+        background: rgba(180, 35, 24, 0.92);
+        transform: scale(1.2);
+      }
+
+      .sidebar-empty {
+        padding: 20px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 980px) {
+        .gallery {
+          grid-template-columns: 1fr;
+          grid-auto-rows: minmax(460px, calc(100vh - 240px));
+          width: min(720px, calc(100vw - 28px));
+          padding-bottom: 220px;
+        }
+
+        .slot img {
+          max-width: 92%;
+          max-height: min(68vh, 680px);
+        }
+
+        h1 {
+          font-size: 34px;
+        }
+
+        .status {
+          display: none;
+        }
+
+        .setting-row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+          padding: 10px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <button type="button" class="sidebar-new" id="newSessionButton">+ 新建会话</button>
+        <button type="button" class="sidebar-toggle" id="sidebarToggle">≡</button>
+      </div>
+      <input class="sidebar-search" id="sessionSearch" type="text" placeholder="搜索会话..." />
+      <div class="sidebar-list" id="sessionList"></div>
+    </nav>
+    <button type="button" class="sidebar-expand" id="sidebarExpand" hidden>☰</button>
+    <header class="topbar">
+      <h1>Images</h1>
+      <div class="top-actions">
+        <span class="status" id="keyStatus">正在读取 API key 状态...</span>
+        <button type="button" id="rawToggle">响应</button>
+        <button type="button" id="keysButton">Keys</button>
+      </div>
+    </header>
+
+    <main class="stage" id="dropSurface">
+      <section class="gallery">
+        <figure class="slot">
+          <figcaption class="slot-label">原图</figcaption>
+          <div class="placeholder" id="sourcePlaceholder">拖入图片或点击底部附件按钮</div>
+          <div class="input-strip" id="sourceList" hidden></div>
+        </figure>
+        <figure class="slot">
+          <figcaption class="slot-label">编辑结果</figcaption>
+          <div class="timer-display" id="timerDisplay" hidden>正在编辑图片... 已用 0.0 秒</div>
+          <div class="placeholder" id="resultPlaceholder">生成后会显示在这里</div>
+          <img id="resultImage" alt="编辑结果" hidden />
+        </figure>
+        <div class="slot"></div>
+        <div class="slot"></div>
+      </section>
+    </main>
+
+    <section class="composer">
+      <div class="popover" id="settingsPopover" hidden>
+        <div class="menu-group">
+          <div class="menu-title">Size</div>
+          <button class="menu-item" data-setting="size" data-value="auto"><span></span><span>Auto</span></button>
+          <button class="menu-item" data-setting="size" data-value="1024x1024"><span></span><span>Square (1024x1024)</span></button>
+          <button class="menu-item" data-setting="size" data-value="1024x1536"><span></span><span>Portrait (1024x1536)</span></button>
+          <button class="menu-item" data-setting="size" data-value="1536x1024"><span></span><span>Landscape (1536x1024)</span></button>
+          <button class="menu-item" data-setting="size" data-value="2048x2048"><span></span><span>2K Square (2048x2048)</span></button>
+          <button class="menu-item" data-setting="size" data-value="2048x1152"><span></span><span>2K Landscape (2048x1152)</span></button>
+          <button class="menu-item" data-setting="size" data-value="3840x2160"><span></span><span>4K Landscape (3840x2160)</span></button>
+          <button class="menu-item" data-setting="size" data-value="2160x3840"><span></span><span>4K Portrait (2160x3840)</span></button>
+        </div>
+        <div class="menu-group">
+          <div class="menu-title">Quality</div>
+          <button class="menu-item" data-setting="quality" data-value="auto"><span></span><span>Auto</span></button>
+          <button class="menu-item" data-setting="quality" data-value="high"><span></span><span>High</span></button>
+          <button class="menu-item" data-setting="quality" data-value="medium"><span></span><span>Medium</span></button>
+          <button class="menu-item" data-setting="quality" data-value="low"><span></span><span>Low</span></button>
+        </div>
+        <button type="button" class="advanced-row" id="advancedButton">Advanced</button>
+      </div>
+
+      <div class="prompt-box">
+        <textarea id="prompt" placeholder="What do you want to see..."></textarea>
+        <button type="button" class="send" id="editImage" title="生成">↑</button>
+        <button type="button" class="send stop" id="stopButton" title="停止" hidden>■</button>
+        <div class="toolbar">
+          <input class="file-input" id="imageFile" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+          <button type="button" class="icon-button" id="attachButton" title="添加图片">＋</button>
+          <button type="button" class="icon-button" id="clearInputsButton" title="清空输入">×</button>
+          <button type="button" class="icon-button" id="settingsButton" title="设置">≡</button>
+          <button type="button" class="icon-button" id="soundToggle" title="提示音">🔔</button>
+          <select class="pill-select" id="count">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="3">3x</option>
+            <option value="4">4x</option>
+          </select>
+          <select class="pill-select" id="provider">
+            <option value="openai">OpenAI</option>
+            <option value="yunwu" selected>第三方 OpenAI</option>
+            <option value="xai">xAI / Grok</option>
+            <option value="third-grok">第三方 Grok</option>
+          </select>
+          <select class="pill-select" id="openaiModel">
+            <option value="gpt-image-2">gpt-image-2</option>
+          </select>
+          <select class="pill-select" id="model" hidden>
+            <option value="grok-imagine-image-quality">grok-imagine-image-quality</option>
+            <option value="grok-imagine-image" selected>grok-imagine-image</option>
+          </select>
+          <input class="pill-select" id="customGrokModel" type="text" value="grok-imagine-image" placeholder="Grok model name" hidden />
+          <select class="pill-select" id="timeout">
+            <option value="0">无超时</option>
+            <option value="180000">3 分钟</option>
+            <option value="300000" selected>5 分钟</option>
+            <option value="600000">10 分钟</option>
+          </select>
+          <select class="pill-select" id="batchMode">
+            <option value="single" selected>单条</option>
+            <option value="batch">批量</option>
+          </select>
+          <div class="spacer"></div>
+          <a id="downloadLink" href="#" target="_blank" rel="noreferrer" hidden>打开结果</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="message" id="message"></div>
+    <pre class="raw-panel" id="rawOutput" hidden></pre>
+
+    <div class="modal-backdrop" id="advancedModal" hidden>
+      <section class="modal">
+        <div class="modal-header">
+          <h2>Advanced settings</h2>
+          <button type="button" id="closeAdvanced">关闭</button>
+        </div>
+        <div class="settings-list">
+          <div class="setting-row">
+            <label for="openaiOutputFormat">Output format</label>
+            <select id="openaiOutputFormat">
+              <option value="png" selected>PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WEBP</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="openaiBackground">Background</label>
+            <select id="openaiBackground">
+              <option value="auto" selected>Auto</option>
+              <option value="transparent">Transparent</option>
+              <option value="opaque">Opaque</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="openaiModeration">Moderation</label>
+            <select id="openaiModeration">
+              <option value="low" selected>Low</option>
+              <option value="auto">Auto</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="openaiPartialImages">Partial images</label>
+            <select id="openaiPartialImages">
+              <option value="0" selected>None</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="openaiInputFidelity">Input fidelity</label>
+            <select id="openaiInputFidelity">
+              <option value="auto" selected>Auto</option>
+              <option value="high">High</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="keysModal" hidden>
+      <section class="modal">
+        <div class="modal-header">
+          <h2>API keys</h2>
+          <button type="button" id="closeKeys">关闭</button>
+        </div>
+        <div class="settings-list">
+          <div class="setting-row">
+            <label for="openaiApiKey">OpenAI API key</label>
+            <div class="key-grid">
+              <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+              <button type="button" id="saveOpenAIKey">保存</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="apiKey">xAI API key</label>
+            <div class="key-grid">
+              <input id="apiKey" type="password" autocomplete="off" placeholder="xai-..." />
+              <button type="button" id="saveKey">保存</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="yunwuApiKey">第三方 OpenAI API key</label>
+            <div class="key-grid">
+              <input id="yunwuApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+              <button type="button" id="saveYunwuKey">保存</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="yunwuBaseUrl">第三方 Base URL</label>
+            <div class="key-grid">
+              <input id="yunwuBaseUrl" type="url" autocomplete="off" placeholder="https://api.zhongzhuan.chat/v1" />
+              <button type="button" id="saveYunwuUrl">保存</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokApiKey">第三方 Grok API key</label>
+            <div class="key-grid">
+              <input id="thirdGrokApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+              <button type="button" id="saveThirdGrokKey">保存</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokBaseUrl">第三方 Grok Base URL</label>
+            <div class="key-grid">
+              <input id="thirdGrokBaseUrl" type="url" autocomplete="off" placeholder="https://api.example.com/v1" />
+              <button type="button" id="saveThirdGrokUrl">保存</button>
+            </div>
+          </div>
+          <div class="status" id="openaiKeyStatus">API key 状态尚未读取。</div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8787" : "";
+
+      const state = {
+        size: "1024x1536",
+        quality: "medium",
+        grokResolution: "2k",
+        grokAspectRatio: "1:1",
+        inputImages: [],
+        activeEdits: {},
+        batchPollId: null,
+        currentBatchId: null,
+        currentSessionId: null,
+      };
+
+      const providerInput = document.querySelector("#provider");
+      const apiKey = document.querySelector("#apiKey");
+      const openaiApiKey = document.querySelector("#openaiApiKey");
+      const yunwuApiKey = document.querySelector("#yunwuApiKey");
+      const yunwuBaseUrl = document.querySelector("#yunwuBaseUrl");
+      const thirdGrokApiKey = document.querySelector("#thirdGrokApiKey");
+      const thirdGrokBaseUrl = document.querySelector("#thirdGrokBaseUrl");
+      const keyStatus = document.querySelector("#keyStatus");
+      const openaiKeyStatus = document.querySelector("#openaiKeyStatus");
+      const saveKey = document.querySelector("#saveKey");
+      const saveOpenAIKey = document.querySelector("#saveOpenAIKey");
+      const saveYunwuKey = document.querySelector("#saveYunwuKey");
+      const saveYunwuUrl = document.querySelector("#saveYunwuUrl");
+      const saveThirdGrokKey = document.querySelector("#saveThirdGrokKey");
+      const saveThirdGrokUrl = document.querySelector("#saveThirdGrokUrl");
+      const imageFile = document.querySelector("#imageFile");
+      const attachButton = document.querySelector("#attachButton");
+      const clearInputsButton = document.querySelector("#clearInputsButton");
+      const dropSurface = document.querySelector("#dropSurface");
+      const promptInput = document.querySelector("#prompt");
+      const modelInput = document.querySelector("#model");
+      const customGrokModelInput = document.querySelector("#customGrokModel");
+      const openaiModelInput = document.querySelector("#openaiModel");
+      const countInput = document.querySelector("#count");
+      const openaiOutputFormatInput = document.querySelector("#openaiOutputFormat");
+      const openaiBackgroundInput = document.querySelector("#openaiBackground");
+      const openaiModerationInput = document.querySelector("#openaiModeration");
+      const openaiPartialImagesInput = document.querySelector("#openaiPartialImages");
+      const openaiInputFidelityInput = document.querySelector("#openaiInputFidelity");
+      const editImage = document.querySelector("#editImage");
+      const stopButton = document.querySelector("#stopButton");
+      const timeoutInput = document.querySelector("#timeout");
+      const message = document.querySelector("#message");
+      const sourceList = document.querySelector("#sourceList");
+      const resultImage = document.querySelector("#resultImage");
+      const sourcePlaceholder = document.querySelector("#sourcePlaceholder");
+      const resultPlaceholder = document.querySelector("#resultPlaceholder");
+      const timerDisplay = document.querySelector("#timerDisplay");
+      const rawOutput = document.querySelector("#rawOutput");
+      const rawToggle = document.querySelector("#rawToggle");
+      const downloadLink = document.querySelector("#downloadLink");
+      const settingsButton = document.querySelector("#settingsButton");
+      const settingsPopover = document.querySelector("#settingsPopover");
+      const advancedButton = document.querySelector("#advancedButton");
+      const advancedModal = document.querySelector("#advancedModal");
+      const closeAdvanced = document.querySelector("#closeAdvanced");
+      const keysButton = document.querySelector("#keysButton");
+      const keysModal = document.querySelector("#keysModal");
+      const closeKeys = document.querySelector("#closeKeys");
+      const batchMode = document.querySelector("#batchMode");
+      const soundToggle = document.querySelector("#soundToggle");
+
+      function setMessage(text, isError = false) {
+        message.textContent = text;
+        message.classList.toggle("error", isError);
+      }
+
+      function formatElapsed(ms) {
+        return `${(ms / 1000).toFixed(1)} 秒`;
+      }
+
+      state.soundEnabled = localStorage.getItem("soundEnabled") !== "false";
+      function updateSoundIcon() {
+        soundToggle.textContent = state.soundEnabled ? "🔔" : "🔕";
+      }
+      updateSoundIcon();
+
+      function playNotificationSound() {
+        if (!state.soundEnabled) return;
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        } catch {}
+      }
+
+      soundToggle.addEventListener("click", () => {
+        state.soundEnabled = !state.soundEnabled;
+        localStorage.setItem("soundEnabled", state.soundEnabled);
+        updateSoundIcon();
+      });
+
+      function startSessionEdit(sid) {
+        stopSessionEdit(sid);
+        state.activeEdits[sid] = {
+          abortController: new AbortController(),
+          timerId: window.setInterval(updateAllSidebarTimers, 100),
+          startedAt: performance.now(),
+          timeoutId: null,
+        };
+      }
+
+      function stopSessionEdit(sid) {
+        const edit = state.activeEdits[sid];
+        if (!edit) return;
+        if (edit.timerId) clearInterval(edit.timerId);
+        if (edit.timeoutId) clearTimeout(edit.timeoutId);
+        delete state.activeEdits[sid];
+      }
+
+      function elapsedForSession(sid) {
+        const edit = state.activeEdits[sid];
+        if (!edit) return "0.0 秒";
+        return formatElapsed(performance.now() - edit.startedAt);
+      }
+
+      function updateAllSidebarTimers() {
+        let currentElapsed = "";
+        Object.entries(state.activeEdits).forEach(([sid, edit]) => {
+          const elapsed = formatElapsed(performance.now() - edit.startedAt);
+          const item = document.querySelector(`.sidebar-item[data-id="${sid}"]`);
+          if (!item) return;
+          const meta = item.querySelector(".sidebar-item-meta");
+          if (meta) {
+            meta.textContent = `正在编辑... ${elapsed}`;
+            meta.style.color = "#16745f";
+            meta.style.fontWeight = "700";
+          }
+          const titleEl = item.querySelector(".sidebar-item-title");
+          if (titleEl && !titleEl.dataset.editing) {
+            let timeEl = item.querySelector(".sidebar-item-time");
+            if (!timeEl) {
+              timeEl = document.createElement("div");
+              timeEl.className = "sidebar-item-time";
+              titleEl.after(timeEl);
+            }
+            timeEl.textContent = `⏱ ${elapsed}`;
+            timeEl.style.cssText = "color:#16745f;font-weight:700;font-size:11px;margin-top:2px";
+          }
+          if (sid === state.currentSessionId) currentElapsed = elapsed;
+        });
+        if (currentElapsed) {
+          timerDisplay.hidden = false;
+          timerDisplay.textContent = `正在编辑图片... 已用 ${currentElapsed}`;
+        } else {
+          timerDisplay.hidden = true;
+        }
+      }
+
+      function syncEditButtonState() {
+        const editing = state.currentSessionId && (state.currentSessionId in state.activeEdits);
+        editImage.hidden = editing;
+        stopButton.hidden = !editing;
+      }
+
+      function showImage(img, placeholder, src) {
+        img.onerror = () => {
+          img.hidden = true;
+          placeholder.hidden = false;
+          placeholder.textContent = "图片加载失败，请查看响应或 output 文件夹";
+        };
+        img.src = src;
+        img.hidden = false;
+        placeholder.hidden = true;
+      }
+
+      function renderSourceList() {
+        sourceList.innerHTML = "";
+        if (!state.inputImages.length) {
+          sourceList.hidden = true;
+          sourcePlaceholder.hidden = false;
+          return;
+        }
+
+        state.inputImages.forEach((src, index) => {
+          const thumb = document.createElement("div");
+          thumb.className = "thumb";
+          const badge = document.createElement("div");
+          badge.className = "thumb-index";
+          badge.textContent = String(index + 1);
+          const img = document.createElement("img");
+          img.src = src;
+          img.alt = `输入图片 ${index + 1}`;
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "thumb-remove";
+          remove.title = `删除输入图片 ${index + 1}`;
+          remove.textContent = "×";
+          remove.addEventListener("click", (event) => {
+            event.stopPropagation();
+            state.inputImages.splice(index, 1);
+            renderSourceList();
+            clearResult();
+            setMessage(`已删除第 ${index + 1} 张输入图片。`);
+          });
+          thumb.append(badge, img, remove);
+          sourceList.appendChild(thumb);
+        });
+        sourceList.hidden = false;
+        sourcePlaceholder.hidden = true;
+      }
+
+      function clearResult() {
+        resultImage.removeAttribute("src");
+        resultImage.hidden = true;
+        resultPlaceholder.hidden = false;
+        downloadLink.hidden = true;
+      }
+
+      function updateProviderFields() {
+        const isOpenAI = providerInput.value === "openai" || providerInput.value === "yunwu";
+        const isThirdGrok = providerInput.value === "third-grok";
+        openaiModelInput.hidden = !isOpenAI;
+        modelInput.hidden = isOpenAI || isThirdGrok;
+        customGrokModelInput.hidden = !isThirdGrok;
+        batchMode.hidden = !isOpenAI;
+        if (!isOpenAI && batchMode.value === "batch") {
+          batchMode.value = "single";
+          promptInput.placeholder = "What do you want to see...";
+        }
+        const limit = getInputLimit();
+        if (state.inputImages.length > limit) {
+          setMessage(`当前服务最多支持 ${limit} 张输入图，请清空后重新选择。`, true);
+        }
+        settingsPopover.hidden = true;
+      }
+
+      function getInputLimit() {
+        if (providerInput.value === "xai") return 1;
+        if (providerInput.value === "third-grok") return 3;
+        return 10;
+      }
+
+      function getGrokModelName() {
+        return providerInput.value === "third-grok"
+          ? (customGrokModelInput.value.trim() || "grok-imagine-image")
+          : modelInput.value;
+      }
+
+      function updateMenuChecks() {
+        document.querySelectorAll(".menu-item").forEach((item) => {
+          const setting = item.dataset.setting;
+          let current = state[setting];
+          if (setting === "grokModel") current = modelInput.value;
+          if (setting === "count") current = countInput.value;
+          const active = current === item.dataset.value;
+          item.classList.toggle("active", active);
+          item.firstElementChild.textContent = active ? "✓" : "";
+        });
+      }
+
+      function renderSettingsPopover() {
+        const isGrok = providerInput.value === "xai" || providerInput.value === "third-grok";
+        const isThirdGrok = providerInput.value === "third-grok";
+        if (isGrok) {
+          settingsPopover.innerHTML = `
+            ${isThirdGrok ? "" : `
+              <div class="menu-group">
+                <div class="menu-title">Model</div>
+                <button class="menu-item" data-setting="grokModel" data-value="grok-imagine-image-quality"><span></span><span>grok-imagine-image-quality</span></button>
+                <button class="menu-item" data-setting="grokModel" data-value="grok-imagine-image"><span></span><span>grok-imagine-image</span></button>
+              </div>
+            `}
+            <div class="menu-group">
+              <div class="menu-title">Number of images</div>
+              <button class="menu-item" data-setting="count" data-value="1"><span></span><span>1</span></button>
+              <button class="menu-item" data-setting="count" data-value="2"><span></span><span>2</span></button>
+              <button class="menu-item" data-setting="count" data-value="3"><span></span><span>3</span></button>
+              <button class="menu-item" data-setting="count" data-value="4"><span></span><span>4</span></button>
+            </div>
+            <div class="menu-group">
+              <div class="menu-title">Image resolution</div>
+              <button class="menu-item" data-setting="grokResolution" data-value="1k"><span></span><span>1k</span></button>
+              <button class="menu-item" data-setting="grokResolution" data-value="2k"><span></span><span>2k</span></button>
+            </div>
+            ${isThirdGrok ? `
+              <div class="menu-group">
+                <div class="menu-title">Aspect ratio</div>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="1:1"><span></span><span>1:1</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="3:4"><span></span><span>3:4</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="4:3"><span></span><span>4:3</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="9:16"><span></span><span>9:16</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="16:9"><span></span><span>16:9</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="2:3"><span></span><span>2:3</span></button>
+                <button class="menu-item" data-setting="grokAspectRatio" data-value="3:2"><span></span><span>3:2</span></button>
+              </div>
+            ` : ""}
+          `;
+        } else {
+          settingsPopover.innerHTML = `
+            <div class="menu-group">
+              <div class="menu-title">Size</div>
+              <button class="menu-item" data-setting="size" data-value="auto"><span></span><span>Auto</span></button>
+              <button class="menu-item" data-setting="size" data-value="1024x1024"><span></span><span>Square (1024x1024)</span></button>
+              <button class="menu-item" data-setting="size" data-value="1024x1536"><span></span><span>Portrait (1024x1536)</span></button>
+              <button class="menu-item" data-setting="size" data-value="1536x1024"><span></span><span>Landscape (1536x1024)</span></button>
+              <button class="menu-item" data-setting="size" data-value="2048x2048"><span></span><span>2K Square (2048x2048)</span></button>
+              <button class="menu-item" data-setting="size" data-value="2048x1152"><span></span><span>2K Landscape (2048x1152)</span></button>
+              <button class="menu-item" data-setting="size" data-value="3840x2160"><span></span><span>4K Landscape (3840x2160)</span></button>
+              <button class="menu-item" data-setting="size" data-value="2160x3840"><span></span><span>4K Portrait (2160x3840)</span></button>
+            </div>
+            <div class="menu-group">
+              <div class="menu-title">Quality</div>
+              <button class="menu-item" data-setting="quality" data-value="auto"><span></span><span>Auto</span></button>
+              <button class="menu-item" data-setting="quality" data-value="high"><span></span><span>High</span></button>
+              <button class="menu-item" data-setting="quality" data-value="medium"><span></span><span>Medium</span></button>
+              <button class="menu-item" data-setting="quality" data-value="low"><span></span><span>Low</span></button>
+            </div>
+            <button type="button" class="advanced-row" id="advancedButton">Advanced</button>
+          `;
+        }
+
+        settingsPopover.querySelectorAll(".menu-item").forEach((item) => {
+          item.addEventListener("click", () => {
+            const setting = item.dataset.setting;
+            const value = item.dataset.value;
+            if (setting === "grokModel") modelInput.value = value;
+            else if (setting === "count") countInput.value = value;
+            else state[setting] = value;
+            updateMenuChecks();
+          });
+        });
+
+        const advanced = settingsPopover.querySelector("#advancedButton");
+        if (advanced) {
+          advanced.addEventListener("click", () => {
+            settingsPopover.hidden = true;
+            advancedModal.hidden = false;
+          });
+        }
+        updateMenuChecks();
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error(`读取图片失败：${file.name}`));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function loadImageFiles(files) {
+        const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+        if (!imageFiles.length) {
+          setMessage("请拖入图片文件。", true);
+          return;
+        }
+
+        const limit = getInputLimit();
+        const available = Math.max(0, limit - state.inputImages.length);
+        const accepted = imageFiles.slice(0, available);
+        if (!accepted.length) {
+          setMessage(`当前服务最多支持 ${limit} 张输入图片。`, true);
+          return;
+        }
+
+        const dataUrls = await Promise.all(accepted.map(readFileAsDataUrl));
+        state.inputImages.push(...dataUrls);
+        renderSourceList();
+        clearResult();
+        const dropped = imageFiles.length - accepted.length;
+        setMessage(`已加入 ${accepted.length} 张图片，共 ${state.inputImages.length} 张。${dropped > 0 ? `已忽略 ${dropped} 张超限图片。` : ""}`);
+      }
+
+      async function refreshKeyStatus() {
+        const response = await fetch(`${API_BASE}/api/key`);
+        const data = await response.json();
+        const xaiText = data.saved ? `xAI ${data.masked}` : "xAI 未保存";
+        const openaiText = data.openaiSaved ? `OpenAI ${data.openaiMasked}` : "OpenAI 未保存";
+        const yunwuText = data.yunwuSaved ? `第三方 OpenAI ${data.yunwuMasked}` : "第三方 OpenAI 未保存";
+        const thirdGrokText = data.thirdGrokSaved ? `第三方 Grok ${data.thirdGrokMasked}` : "第三方 Grok 未保存";
+        keyStatus.textContent = `${openaiText} / ${yunwuText} / ${xaiText} / ${thirdGrokText}`;
+        openaiKeyStatus.textContent = data.openaiSaved
+          ? `OpenAI key 已保存：${data.openaiMasked}`
+          : "OpenAI key 尚未保存";
+        openaiKeyStatus.textContent += data.yunwuSaved
+          ? `；第三方 OpenAI key 已保存：${data.yunwuMasked}`
+          : "；第三方 OpenAI key 尚未保存";
+        openaiKeyStatus.textContent += data.thirdGrokSaved
+          ? `；第三方 Grok key 已保存：${data.thirdGrokMasked}`
+          : "；第三方 Grok key 尚未保存";
+        yunwuBaseUrl.value = data.yunwuBaseUrl || "https://api.zhongzhuan.chat/v1";
+        thirdGrokBaseUrl.value = data.thirdGrokBaseUrl || "https://api.x.ai/v1";
+      }
+
+      async function saveProviderKey(provider, value, baseUrl = "") {
+        setMessage("正在保存 API key...");
+        const response = await fetch(`${API_BASE}/api/key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, apiKey: value, baseUrl }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "保存失败。", true);
+          return;
+        }
+        apiKey.value = "";
+        openaiApiKey.value = "";
+        yunwuApiKey.value = "";
+        thirdGrokApiKey.value = "";
+        await refreshKeyStatus();
+        setMessage("API key 已保存。");
+      }
+
+      attachButton.addEventListener("click", () => imageFile.click());
+      clearInputsButton.addEventListener("click", () => {
+        state.inputImages = [];
+        imageFile.value = "";
+        renderSourceList();
+        clearResult();
+        setMessage("已清空输入图片。");
+      });
+      imageFile.addEventListener("change", () => loadImageFiles(imageFile.files));
+      providerInput.addEventListener("change", updateProviderFields);
+      saveKey.addEventListener("click", () => saveProviderKey("xai", apiKey.value));
+      saveOpenAIKey.addEventListener("click", () => saveProviderKey("openai", openaiApiKey.value));
+      saveYunwuKey.addEventListener("click", () => saveProviderKey("yunwu", yunwuApiKey.value, yunwuBaseUrl.value));
+      saveYunwuUrl.addEventListener("click", () => saveProviderKey("yunwu-url", "", yunwuBaseUrl.value));
+      saveThirdGrokKey.addEventListener("click", () => saveProviderKey("third-grok", thirdGrokApiKey.value, thirdGrokBaseUrl.value));
+      saveThirdGrokUrl.addEventListener("click", () => saveProviderKey("third-grok-url", "", thirdGrokBaseUrl.value));
+
+      settingsButton.addEventListener("click", () => {
+        renderSettingsPopover();
+        settingsPopover.hidden = !settingsPopover.hidden;
+      });
+
+      closeAdvanced.addEventListener("click", () => {
+        advancedModal.hidden = true;
+      });
+      advancedModal.addEventListener("click", (event) => {
+        if (event.target === advancedModal) advancedModal.hidden = true;
+      });
+
+      keysButton.addEventListener("click", () => {
+        keysModal.hidden = false;
+      });
+      closeKeys.addEventListener("click", () => {
+        keysModal.hidden = true;
+      });
+      keysModal.addEventListener("click", (event) => {
+        if (event.target === keysModal) keysModal.hidden = true;
+      });
+
+      rawToggle.addEventListener("click", () => {
+        rawOutput.hidden = !rawOutput.hidden;
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropSurface.addEventListener(eventName, (event) => event.preventDefault());
+      });
+      dropSurface.addEventListener("drop", (event) => {
+        event.preventDefault();
+        loadImageFiles(event.dataTransfer.files);
+      });
+
+      editImage.addEventListener("click", async () => {
+        if (batchMode.value === "batch") {
+          await submitBatch();
+          return;
+        }
+        if (!state.inputImages.length) {
+          setMessage("请先拖入或选择一张图片。", true);
+          return;
+        }
+        const limit = getInputLimit();
+        if (state.inputImages.length > limit) {
+          setMessage(`当前服务最多支持 ${limit} 张输入图，请清空后重新选择。`, true);
+          return;
+        }
+        if (!promptInput.value.trim()) {
+          setMessage("请输入编辑文字。", true);
+          return;
+        }
+
+        const currentSid = state.currentSessionId;
+        editImage.hidden = true;
+        stopButton.hidden = false;
+        clearResult();
+        rawOutput.hidden = true;
+        startSessionEdit(currentSid);
+
+        if (currentSid) {
+          const promptText = promptInput.value.trim();
+          fetch(`${API_BASE}/api/sessions/${currentSid}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: promptText, title: promptText.slice(0, 50) || "新会话" }),
+          }).catch(() => {});
+
+          const item = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
+          if (item) {
+            const titleEl = item.querySelector(".sidebar-item-title");
+            if (titleEl) titleEl.textContent = promptText.slice(0, 50) || "新会话";
+          }
+        }
+
+        const edit = state.activeEdits[currentSid];
+        const timeout = Number(timeoutInput.value);
+        if (timeout > 0) {
+          edit.timeoutId = setTimeout(() => edit.abortController.abort(), timeout);
+        }
+
+        try {
+          const response = await fetch(`${API_BASE}/api/edit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider: providerInput.value,
+              model: getGrokModelName(),
+              openaiModel: openaiModelInput.value,
+              n: Number(countInput.value),
+              aspectRatio: state.grokAspectRatio,
+              resolution: state.grokResolution,
+              size: state.size,
+              quality: state.quality,
+              outputFormat: openaiOutputFormatInput.value,
+              background: openaiBackgroundInput.value,
+              moderation: openaiModerationInput.value,
+              partialImages: Number(openaiPartialImagesInput.value),
+              inputFidelity: openaiInputFidelityInput.value,
+              prompt: promptInput.value,
+              imageUrls: state.inputImages,
+              imageUrl: state.inputImages[0],
+              sessionId: currentSid,
+            }),
+            signal: edit.abortController.signal,
+          });
+
+          const data = await response.json();
+          rawOutput.textContent = JSON.stringify(data, null, 2);
+
+          if (!response.ok) {
+            rawOutput.hidden = false;
+            setMessage(`${data.error || "编辑失败。"} 用时 ${elapsedForSession(currentSid)}`, true);
+            playNotificationSound();
+            return;
+          }
+
+          const first = data.data && data.data[0];
+          const savedOutput = data.saved?.output;
+          let displayUrl = savedOutput || (first && (first.url || first.b64_json));
+          if (!displayUrl) {
+            rawOutput.hidden = false;
+            setMessage(`请求成功，但返回里没有找到图片。用时 ${elapsedForSession(currentSid)}，请查看响应。`, true);
+            playNotificationSound();
+            return;
+          }
+
+          if (savedOutput) {
+            displayUrl = `${API_BASE}/api/file?path=${encodeURIComponent(savedOutput)}&t=${Date.now()}`;
+          } else if (first.b64_json) {
+            displayUrl = `data:${first.mime_type || "image/png"};base64,${first.b64_json}`;
+          }
+
+          if (currentSid === state.currentSessionId) {
+            showImage(resultImage, resultPlaceholder, displayUrl);
+            downloadLink.href = displayUrl;
+            downloadLink.hidden = false;
+          }
+          setMessage(`图片生成成功，总用时 ${elapsedForSession(currentSid)}`);
+          playNotificationSound();
+        } catch (error) {
+          if (error.name === "AbortError") {
+            setMessage(`操作已取消，用时 ${elapsedForSession(currentSid)}`, true);
+          } else {
+            setMessage(`无法连接本地服务：${error.message || "请求失败。"} 用时 ${elapsedForSession(currentSid)}`, true);
+            playNotificationSound();
+          }
+        } finally {
+          const finalElapsed = elapsedForSession(currentSid);
+          stopSessionEdit(currentSid);
+          if (currentSid === state.currentSessionId) {
+            syncEditButtonState();
+          }
+          await loadSessions();
+          const doneItem = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
+          if (doneItem) {
+            const titleEl = doneItem.querySelector(".sidebar-item-title");
+            if (titleEl) {
+              const timeEl = document.createElement("div");
+              timeEl.textContent = `⏱ ${finalElapsed}`;
+              timeEl.style.cssText = "color:var(--muted);font-size:11px;margin-top:2px";
+              titleEl.after(timeEl);
+            }
+          }
+        }
+      });
+
+      stopButton.addEventListener("click", () => {
+        const edit = state.activeEdits[state.currentSessionId];
+        if (edit && edit.abortController) {
+          edit.abortController.abort();
+        }
+      });
+
+      batchMode.addEventListener("change", () => {
+        if (batchMode.value === "batch") {
+          promptInput.placeholder = "每行一条提示词，批量提交...";
+          promptInput.rows = 5;
+        } else {
+          promptInput.placeholder = "What do you want to see...";
+          promptInput.rows = 2;
+        }
+      });
+
+      function stopBatchPolling() {
+        if (state.batchPollId) {
+          clearInterval(state.batchPollId);
+          state.batchPollId = null;
+        }
+      }
+
+      async function pollBatchStatus(batchId, provider) {
+        try {
+          const resp = await fetch(`${API_BASE}/api/batch/${batchId}`, {
+            headers: { "x-provider": provider },
+          });
+          const result = await resp.json();
+          if (!resp.ok) {
+            setMessage(result.error || "查询批量任务失败", true);
+            stopBatchPolling();
+            return;
+          }
+          setMessage(`批量任务状态: ${result.status}${result.output_count != null ? ` · 已生成 ${result.output_count} 张` : ""}`);
+          if (result.status === "completed") {
+            stopBatchPolling();
+            state.currentBatchId = null;
+            if (result.outputs && result.outputs.length) {
+              const url = `${API_BASE}/api/file?path=${encodeURIComponent(result.outputs[0])}&t=${Date.now()}`;
+              showImage(resultImage, resultPlaceholder, url);
+              downloadLink.href = url;
+              downloadLink.hidden = false;
+            }
+            loadSessions();
+            playNotificationSound();
+          } else if (result.status === "failed" || result.status === "expired" || result.status === "cancelled") {
+            stopBatchPolling();
+            state.currentBatchId = null;
+            setMessage(`批量任务${result.status === "failed" ? "失败" : result.status === "expired" ? "过期" : "已取消"}`, true);
+            loadSessions();
+          }
+        } catch {
+          setMessage("查询批量任务状态失败", true);
+        }
+      }
+
+      async function submitBatch() {
+        if (!state.inputImages.length) {
+          setMessage("请先拖入或选择一张图片。", true);
+          return;
+        }
+        const limit = getInputLimit();
+        if (state.inputImages.length > limit) {
+          setMessage(`当前服务最多支持 ${limit} 张输入图，请清空后重新选择。`, true);
+          return;
+        }
+
+        const prompts = promptInput.value.trim().split("\n").filter(Boolean);
+        if (!prompts.length) {
+          setMessage("请在批量模式下每行输入一条提示词。", true);
+          return;
+        }
+
+        const provider = providerInput.value;
+        if (provider === "xai" || provider === "third-grok") {
+          setMessage("批量模式仅支持 OpenAI / 第三方 OpenAI。", true);
+          return;
+        }
+
+        editImage.hidden = true;
+        stopButton.hidden = true;
+        clearResult();
+        rawOutput.hidden = true;
+
+        const currentSid = state.currentSessionId;
+        if (currentSid) {
+          const titleText = `批量 ${prompts.length} 条`;
+          fetch(`${API_BASE}/api/sessions/${currentSid}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: prompts.join(" | "), title: titleText }),
+          }).catch(() => {});
+
+          const item = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
+          if (item) {
+            const titleEl = item.querySelector(".sidebar-item-title");
+            if (titleEl) titleEl.textContent = titleText;
+          }
+        }
+
+        try {
+          const resp = await fetch(`${API_BASE}/api/batch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider,
+              model: provider === "xai" || provider === "third-grok" ? getGrokModelName() : openaiModelInput.value,
+              prompts,
+              imageUrls: state.inputImages,
+              n: Number(countInput.value),
+              size: state.size,
+              quality: state.quality,
+              outputFormat: openaiOutputFormatInput.value,
+              background: openaiBackgroundInput.value,
+              moderation: openaiModerationInput.value,
+              partialImages: Number(openaiPartialImagesInput.value),
+              inputFidelity: openaiInputFidelityInput.value,
+              sessionId: currentSid,
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            setMessage(data.error || "批量任务创建失败。", true);
+            return;
+          }
+          state.currentBatchId = data.batch_id;
+          setMessage(`批量任务已提交 (${data.prompt_count} 条)，自动轮询中...`);
+          stopBatchPolling();
+          state.batchPollId = setInterval(() => pollBatchStatus(data.batch_id, provider), 30000);
+          pollBatchStatus(data.batch_id, provider);
+        } catch (error) {
+          setMessage(`批量提交失败: ${error.message}`, true);
+        } finally {
+          editImage.hidden = false;
+          stopButton.hidden = true;
+        }
+      }
+
+      updateProviderFields();
+      updateMenuChecks();
+      refreshKeyStatus().catch((error) => {
+        keyStatus.textContent = "无法读取 API key 状态。";
+        setMessage(`无法连接本地服务：${error.message || "请求失败。"}`, true);
+      });
+
+      const sidebarEl = document.querySelector("#sidebar");
+      const sidebarToggle = document.querySelector("#sidebarToggle");
+      const sidebarExpand = document.querySelector("#sidebarExpand");
+      const newSessionButton = document.querySelector("#newSessionButton");
+      const sessionSearch = document.querySelector("#sessionSearch");
+      const sessionList = document.querySelector("#sessionList");
+
+      let allSessions = [];
+
+      function formatTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      async function createNewSession() {
+        try {
+          const response = await fetch(`${API_BASE}/api/sessions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "新会话" }),
+          });
+          const data = await response.json();
+          state.currentSessionId = data.id;
+          await loadSessions();
+        } catch {
+          state.currentSessionId = null;
+        }
+      }
+
+      async function saveCurrentSessionPrompt() {
+        if (!state.currentSessionId) return;
+        const text = promptInput.value.trim();
+        if (!text) return;
+        try {
+          await fetch(`${API_BASE}/api/sessions/${state.currentSessionId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: text, title: text.slice(0, 50) }),
+          });
+        } catch {}
+      }
+
+      async function loadSessions() {
+        try {
+          const response = await fetch(`${API_BASE}/api/sessions`);
+          allSessions = await response.json();
+          renderSessions(allSessions);
+        } catch {
+          sessionList.innerHTML = '<div class="sidebar-empty">加载失败</div>';
+        }
+      }
+
+      function renderSessions(sessions) {
+        if (!sessions.length) {
+          sessionList.innerHTML = '<div class="sidebar-empty">暂无会话记录</div>';
+          return;
+        }
+        sessionList.innerHTML = "";
+        for (const s of sessions) {
+          const item = document.createElement("div");
+          item.className = "sidebar-item";
+          item.dataset.id = s.id;
+          if (s.id === state.currentSessionId) item.classList.add("active");
+
+          const title = document.createElement("div");
+          title.className = "sidebar-item-title";
+          title.textContent = s.title || s.prompt || "(无提示词)";
+          title.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            const origTitle = title.dataset.origTitle || title.textContent;
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = origTitle === "(无提示词)" ? "" : origTitle;
+            input.style.cssText = "width:100%;border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600;outline:none";
+            title.dataset.editing = "1";
+            title.replaceWith(input);
+            input.focus();
+            input.select();
+            const save = async () => {
+              const newTitle = input.value.trim() || "无标题";
+              delete title.dataset.editing;
+              delete title.dataset.origTitle;
+              title.textContent = newTitle;
+              input.replaceWith(title);
+              try {
+                await fetch(`${API_BASE}/api/sessions/${s.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ title: newTitle }),
+                });
+                if (s.id === state.currentSessionId) {
+                  const sessionTitleEl = item.querySelector(".sidebar-item-title");
+                  if (sessionTitleEl) sessionTitleEl.textContent = newTitle;
+                }
+              } catch {}
+            };
+            input.addEventListener("blur", save);
+            input.addEventListener("keydown", (ke) => {
+              if (ke.key === "Enter") { ke.preventDefault(); input.blur(); }
+              if (ke.key === "Escape") { input.value = origTitle === "(无提示词)" ? "" : origTitle; input.blur(); }
+            });
+          });
+
+          const meta = document.createElement("div");
+          meta.className = "sidebar-item-meta";
+          const statusIcon = s.success ? "✓" : "✗";
+          meta.textContent = `${statusIcon} ${formatTime(s.createdAt)} · ${s.provider || ""}`;
+
+          item.append(title, meta);
+
+          if (s.outputThumb) {
+            const thumb = document.createElement("img");
+            thumb.className = "sidebar-item-thumb";
+            thumb.src = `${API_BASE}/api/file?path=${encodeURIComponent(s.outputThumb)}`;
+            thumb.alt = "缩略图";
+            thumb.loading = "lazy";
+            item.appendChild(thumb);
+          }
+
+          if (!s.success && s.id) {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "sidebar-item-error";
+            errorDiv.textContent = "生成失败";
+            item.appendChild(errorDiv);
+          }
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "sidebar-item-delete";
+          deleteBtn.textContent = "×";
+          deleteBtn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            const resp = await fetch(`${API_BASE}/api/sessions/${s.id}`, { method: "DELETE" });
+            const result = await resp.json();
+            if (!resp.ok) {
+              setMessage(result.error || "删除失败。", true);
+              return;
+            }
+            if (state.currentSessionId === s.id) {
+              state.currentSessionId = null;
+            }
+            await loadSessions();
+            if (!state.currentSessionId) {
+              await createNewSession();
+            }
+            setMessage("已删除会话。");
+          });
+          item.appendChild(deleteBtn);
+
+          item.addEventListener("click", async () => {
+            await saveCurrentSessionPrompt();
+            try {
+              const resp = await fetch(`${API_BASE}/api/sessions/${s.id}`);
+              const detail = await resp.json();
+              state.currentSessionId = s.id;
+              if (detail.prompt) promptInput.value = detail.prompt;
+              state.inputImages = [];
+              imageFile.value = "";
+              if (detail.inputPaths) {
+                for (const p of detail.inputPaths) {
+                  state.inputImages.push(`${API_BASE}/api/file?path=${encodeURIComponent(p)}`);
+                }
+              }
+              renderSourceList();
+              clearResult();
+              if (detail.outputPaths && detail.outputPaths.length) {
+                const url = `${API_BASE}/api/file?path=${encodeURIComponent(detail.outputPaths[0])}`;
+                showImage(resultImage, resultPlaceholder, url);
+                downloadLink.href = url;
+                downloadLink.hidden = false;
+              }
+              if (detail.error) {
+                setMessage(detail.error, true);
+              } else {
+                setMessage("已加载会话记录。");
+              }
+              sessionList.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
+              item.classList.add("active");
+              syncEditButtonState();
+            } catch {
+              setMessage("加载会话详情失败。", true);
+            }
+          });
+
+          sessionList.appendChild(item);
+        }
+      }
+
+      sessionSearch.addEventListener("input", () => {
+        const q = sessionSearch.value.trim().toLowerCase();
+        if (!q) {
+          renderSessions(allSessions);
+          return;
+        }
+        const filtered = allSessions.filter((s) => (s.prompt || "").toLowerCase().includes(q));
+        renderSessions(filtered);
+      });
+
+      newSessionButton.addEventListener("click", async () => {
+        await saveCurrentSessionPrompt();
+        state.inputImages = [];
+        imageFile.value = "";
+        renderSourceList();
+        clearResult();
+        promptInput.value = "";
+        sessionList.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
+        await createNewSession();
+        syncEditButtonState();
+        setMessage("已新建会话。");
+      });
+
+      sidebarToggle.addEventListener("click", () => {
+        sidebarEl.classList.add("collapsed");
+        document.body.classList.add("sidebar-collapsed");
+        sidebarExpand.hidden = false;
+      });
+
+      sidebarExpand.addEventListener("click", () => {
+        sidebarEl.classList.remove("collapsed");
+        document.body.classList.remove("sidebar-collapsed");
+        sidebarExpand.hidden = true;
+      });
+
+      loadSessions().then(() => {
+        if (!state.currentSessionId) {
+          createNewSession();
+        }
+      });
+    </script>
+  </body>
+</html>

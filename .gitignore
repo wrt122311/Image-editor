@@ -1,0 +1,21 @@
+# Local API credentials and environment overrides
+.xai-config.json
+.env
+.env.*
+!.env.example
+
+# Local sessions, request dumps, and API responses
+sessions.json
+last-*.json
+
+# Uploaded references and generated images
+input/
+output/
+
+# Dependencies and local tooling
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
