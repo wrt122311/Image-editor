@@ -437,6 +437,13 @@
         background: #fff;
       }
 
+      .setting-row .retry-toggle {
+        justify-self: end;
+        width: 22px;
+        min-height: 22px;
+        accent-color: #14836d;
+      }
+
       .key-grid {
         display: grid;
         grid-template-columns: 1fr auto;
@@ -834,6 +841,25 @@
               <option value="low">Low</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label for="autoRetry">自动重试</label>
+            <input class="retry-toggle" id="autoRetry" type="checkbox" />
+          </div>
+          <div class="setting-row">
+            <label for="retryCount">重试次数</label>
+            <select id="retryCount">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </div>
         </div>
       </section>
     </div>
@@ -936,6 +962,8 @@
       const openaiModerationInput = document.querySelector("#openaiModeration");
       const openaiPartialImagesInput = document.querySelector("#openaiPartialImages");
       const openaiInputFidelityInput = document.querySelector("#openaiInputFidelity");
+      const autoRetryInput = document.querySelector("#autoRetry");
+      const retryCountInput = document.querySelector("#retryCount");
       const editImage = document.querySelector("#editImage");
       const stopButton = document.querySelector("#stopButton");
       const timeoutInput = document.querySelector("#timeout");
@@ -962,6 +990,73 @@
       function setMessage(text, isError = false) {
         message.textContent = text;
         message.classList.toggle("error", isError);
+      }
+
+      function syncRetrySettings() {
+        retryCountInput.disabled = !autoRetryInput.checked;
+        localStorage.setItem("desktop_auto_retry", String(autoRetryInput.checked));
+        localStorage.setItem("desktop_retry_count", retryCountInput.value);
+      }
+
+      autoRetryInput.checked = localStorage.getItem("desktop_auto_retry") === "true";
+      retryCountInput.value = localStorage.getItem("desktop_retry_count") || "3";
+      if (![...retryCountInput.options].some((option) => option.value === retryCountInput.value)) {
+        retryCountInput.value = "3";
+      }
+      retryCountInput.disabled = !autoRetryInput.checked;
+      autoRetryInput.addEventListener("change", syncRetrySettings);
+      retryCountInput.addEventListener("change", syncRetrySettings);
+
+      function waitForRetry(ms, signal) {
+        return new Promise((resolve, reject) => {
+          if (signal?.aborted) {
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+          }
+          const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+          }, ms);
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+          signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      }
+
+      function retryDelay(response, retryNumber) {
+        const retryAfter = response?.headers?.get("retry-after");
+        if (retryAfter) {
+          const seconds = Number(retryAfter);
+          if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+          const dateDelay = Date.parse(retryAfter) - Date.now();
+          if (Number.isFinite(dateDelay)) return Math.max(0, dateDelay);
+        }
+        return Math.min(1000 * (2 ** (retryNumber - 1)), 10000);
+      }
+
+      async function fetchEditWithRetry(url, options) {
+        const maxRetries = autoRetryInput.checked ? Number(retryCountInput.value) : 0;
+        let retryNumber = 0;
+
+        while (true) {
+          let response;
+          try {
+            response = await fetch(url, options);
+          } catch (error) {
+            if (error.name === "AbortError" || retryNumber >= maxRetries) throw error;
+          }
+
+          const retryableResponse = response && (response.status === 429 || response.status >= 500);
+          if (response && (!retryableResponse || retryNumber >= maxRetries)) return response;
+
+          retryNumber += 1;
+          const delay = retryDelay(response, retryNumber);
+          const reason = response ? `HTTP ${response.status}` : "网络连接失败";
+          setMessage(`${reason}，${(delay / 1000).toFixed(1)} 秒后自动重试 (${retryNumber}/${maxRetries})...`, true);
+          await waitForRetry(delay, options.signal);
+        }
       }
 
       function formatElapsed(ms) {
@@ -1410,7 +1505,7 @@
         }
 
         try {
-          const response = await fetch(`${API_BASE}/api/edit`, {
+          const response = await fetchEditWithRetry(`${API_BASE}/api/edit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
