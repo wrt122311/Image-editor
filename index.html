@@ -698,6 +698,26 @@
           padding: 10px 0;
         }
       }
+
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+        background: rgba(0, 0, 0, 0.88);
+        cursor: zoom-out;
+      }
+      .lightbox[hidden] { display: none; }
+      .lightbox img {
+        max-width: calc(100vw - 64px);
+        max-height: calc(100vh - 64px);
+        object-fit: contain;
+        border-radius: 6px;
+      }
+      .slot img { cursor: zoom-in; }
+      .thumb img { cursor: zoom-in; }
     </style>
   </head>
   <body>
@@ -706,7 +726,7 @@
         <button type="button" class="sidebar-new" id="newSessionButton">+ 新建会话</button>
         <button type="button" class="sidebar-toggle" id="sidebarToggle">≡</button>
       </div>
-      <input class="sidebar-search" id="sessionSearch" type="text" placeholder="搜索会话..." />
+      <input class="sidebar-search" id="sessionSearch" name="session_filter_no_autofill" type="search" placeholder="搜索会话..." autocomplete="off" autocapitalize="off" spellcheck="false" readonly />
       <div class="sidebar-list" id="sessionList"></div>
     </nav>
     <button type="button" class="sidebar-expand" id="sidebarExpand" hidden>☰</button>
@@ -781,7 +801,7 @@
           </select>
           <select class="pill-select" id="provider">
             <option value="openai">OpenAI</option>
-            <option value="yunwu" selected>第三方 OpenAI</option>
+            <optgroup id="thirdOpenAIOptions" label="第三方 GPT"></optgroup>
             <option value="xai">xAI / Grok</option>
             <option value="third-grok">第三方 Grok</option>
           </select>
@@ -882,6 +902,10 @@
             <label for="retryOnSuccess">成功后继续重试</label>
             <input class="retry-toggle" id="retryOnSuccess" type="checkbox" />
           </div>
+          <div class="setting-row">
+            <label for="retryRandomPrompt">重试时随机更换提示词</label>
+            <input class="retry-toggle" id="retryRandomPrompt" type="checkbox" checked />
+          </div>
         </div>
       </section>
     </div>
@@ -908,18 +932,48 @@
             </div>
           </div>
           <div class="setting-row">
-            <label for="yunwuApiKey">第三方 OpenAI API key</label>
+            <label for="openAIProfileSelect">第三方 GPT 配置</label>
             <div class="key-grid">
-              <input id="yunwuApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-              <button type="button" id="saveYunwuKey">保存</button>
+              <select id="openAIProfileSelect">
+                <option value="">新增配置</option>
+              </select>
+              <button type="button" id="deleteOpenAIProfile">删除</button>
             </div>
           </div>
           <div class="setting-row">
-            <label for="yunwuBaseUrl">第三方 Base URL</label>
-            <div class="key-grid">
-              <input id="yunwuBaseUrl" type="url" autocomplete="off" placeholder="https://api.zhongzhuan.chat/v1" />
-              <button type="button" id="saveYunwuUrl">保存</button>
-            </div>
+            <label for="openAIProfileName">配置名称</label>
+            <input id="openAIProfileName" type="text" autocomplete="off" placeholder="例如：线路 A" />
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileKey">第三方 GPT API key</label>
+            <input id="openAIProfileKey" type="password" autocomplete="off" placeholder="sk-...；更新时留空可保留原 key" />
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileBaseUrl">Base URL</label>
+            <input id="openAIProfileBaseUrl" type="url" autocomplete="off" placeholder="https://api.example.com/v1" />
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileModel">模型名</label>
+            <input id="openAIProfileModel" type="text" autocomplete="off" value="gpt-image-2" placeholder="gpt-image-2" />
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileMode">接口模式</label>
+            <select id="openAIProfileMode">
+              <option value="edits">OpenAI 编辑直连 (/images/edits)</option>
+              <option value="tasks">异步任务生成 (/images/generations)</option>
+            </select>
+          </div>
+          <div class="setting-row" id="openAIProfileResolutionRow" hidden>
+            <label for="openAIProfileResolution">异步任务分辨率</label>
+            <select id="openAIProfileResolution">
+              <option value="1k">1K</option>
+              <option value="2k" selected>2K</option>
+              <option value="4k">4K</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>配置操作</label>
+            <button type="button" id="saveOpenAIProfile">保存第三方 GPT 配置</button>
           </div>
           <div class="setting-row">
             <label for="thirdGrokApiKey">第三方 Grok API key</label>
@@ -938,6 +992,10 @@
           <div class="status" id="openaiKeyStatus">API key 状态尚未读取。</div>
         </div>
       </section>
+    </div>
+
+    <div class="lightbox" id="lightbox" hidden>
+      <img id="lightboxImage" alt="放大预览" />
     </div>
 
     <script>
@@ -976,26 +1034,40 @@
         { number: 28, text: "胸像近景，微微低头，轻柔笑意，室内背景虚化，暖色柔光，保持画风不变。" },
         { number: 29, text: "头像近景，正面视角，开心微笑，背景简洁，柔和均匀光线，保持画风不变。" },
         { number: 30, text: "头像近景，三分之四视角，平静温柔表情，纯色背景，细腻柔光，保持画风不变。" },
+        { number: 31, text: "全身照，日式温泉场景，优雅坐姿，枫叶飘落，红色纸伞，温暖灯光，4K高清，保持画风不变。" },
+        { number: 32, text: "全身照，传统温泉背景，温柔表情，三分之四视角，灯笼装饰，蒸汽缭绕，保持画风不变。" },
+        { number: 33, text: "全身照，温泉池边，轻松自然姿态，小狐狸陪伴，雪人装饰，氛围宁静，保持画风不变。" },
+        { number: 34, text: "全身照，古典温泉场景，精致发饰，蝴蝶结装饰，彩色枫叶，艺术构图，保持画风不变。" },
+        { number: 35, text: "全身照，温泉庭院，柔和侧光，纸伞装饰，花瓣飘落，温暖色调，保持画风不变。" },
       ];
 
       const providerInput = document.querySelector("#provider");
+      const thirdOpenAIOptions = document.querySelector("#thirdOpenAIOptions");
       const apiKey = document.querySelector("#apiKey");
       const openaiApiKey = document.querySelector("#openaiApiKey");
-      const yunwuApiKey = document.querySelector("#yunwuApiKey");
-      const yunwuBaseUrl = document.querySelector("#yunwuBaseUrl");
+      const openAIProfileSelect = document.querySelector("#openAIProfileSelect");
+      const openAIProfileName = document.querySelector("#openAIProfileName");
+      const openAIProfileKey = document.querySelector("#openAIProfileKey");
+      const openAIProfileBaseUrl = document.querySelector("#openAIProfileBaseUrl");
+      const openAIProfileModel = document.querySelector("#openAIProfileModel");
+      const openAIProfileMode = document.querySelector("#openAIProfileMode");
+      const openAIProfileResolution = document.querySelector("#openAIProfileResolution");
+      const openAIProfileResolutionRow = document.querySelector("#openAIProfileResolutionRow");
       const thirdGrokApiKey = document.querySelector("#thirdGrokApiKey");
       const thirdGrokBaseUrl = document.querySelector("#thirdGrokBaseUrl");
       const keyStatus = document.querySelector("#keyStatus");
       const openaiKeyStatus = document.querySelector("#openaiKeyStatus");
       const saveKey = document.querySelector("#saveKey");
       const saveOpenAIKey = document.querySelector("#saveOpenAIKey");
-      const saveYunwuKey = document.querySelector("#saveYunwuKey");
-      const saveYunwuUrl = document.querySelector("#saveYunwuUrl");
+      const saveOpenAIProfile = document.querySelector("#saveOpenAIProfile");
+      const deleteOpenAIProfile = document.querySelector("#deleteOpenAIProfile");
       const saveThirdGrokKey = document.querySelector("#saveThirdGrokKey");
       const saveThirdGrokUrl = document.querySelector("#saveThirdGrokUrl");
       const imageFile = document.querySelector("#imageFile");
       const attachButton = document.querySelector("#attachButton");
       const clearInputsButton = document.querySelector("#clearInputsButton");
+      const lightbox = document.querySelector("#lightbox");
+      const lightboxImage = document.querySelector("#lightboxImage");
       const dropSurface = document.querySelector("#dropSurface");
       const promptInput = document.querySelector("#prompt");
       const promptPresetInput = document.querySelector("#promptPreset");
@@ -1011,6 +1083,7 @@
       const autoRetryInput = document.querySelector("#autoRetry");
       const retryCountInput = document.querySelector("#retryCount");
       const retryOnSuccessInput = document.querySelector("#retryOnSuccess");
+      const retryRandomPromptInput = document.querySelector("#retryRandomPrompt");
       const editImage = document.querySelector("#editImage");
       const stopButton = document.querySelector("#stopButton");
       const timeoutInput = document.querySelector("#timeout");
@@ -1064,22 +1137,27 @@
       function syncRetrySettings() {
         retryCountInput.disabled = !autoRetryInput.checked;
         retryOnSuccessInput.disabled = !autoRetryInput.checked;
+        retryRandomPromptInput.disabled = !autoRetryInput.checked;
         localStorage.setItem("desktop_auto_retry", String(autoRetryInput.checked));
         localStorage.setItem("desktop_retry_count", retryCountInput.value);
         localStorage.setItem("desktop_retry_on_success", String(retryOnSuccessInput.checked));
+        localStorage.setItem("desktop_retry_random_prompt", String(retryRandomPromptInput.checked));
       }
 
       autoRetryInput.checked = localStorage.getItem("desktop_auto_retry") === "true";
       retryOnSuccessInput.checked = localStorage.getItem("desktop_retry_on_success") === "true";
+      retryRandomPromptInput.checked = localStorage.getItem("desktop_retry_random_prompt") !== "false";
       retryCountInput.value = localStorage.getItem("desktop_retry_count") || "3";
       if (![...retryCountInput.options].some((option) => option.value === retryCountInput.value)) {
         retryCountInput.value = "3";
       }
       retryCountInput.disabled = !autoRetryInput.checked;
       retryOnSuccessInput.disabled = !autoRetryInput.checked;
+      retryRandomPromptInput.disabled = !autoRetryInput.checked;
       autoRetryInput.addEventListener("change", syncRetrySettings);
       retryCountInput.addEventListener("change", syncRetrySettings);
       retryOnSuccessInput.addEventListener("change", syncRetrySettings);
+      retryRandomPromptInput.addEventListener("change", syncRetrySettings);
 
       function waitForRetry(ms, signal) {
         return new Promise((resolve, reject) => {
@@ -1182,8 +1260,7 @@
           const blockedBySafety = await responseIndicatesSafetyBlock(response);
           const transientStatuses = [408, 409, 425, 429];
           const retryableResponse = response
-            && !blockedBySafety
-            && (transientStatuses.includes(response.status) || response.status >= 500);
+            && (blockedBySafety || transientStatuses.includes(response.status) || response.status >= 500);
           const successfulResponse = response?.ok;
           const shouldRepeatSuccess = successfulResponse && retryOnSuccess && retryNumber < maxRetries;
 
@@ -1209,7 +1286,7 @@
 
           retryNumber += 1;
           let retryPreset = null;
-          if (!shouldRepeatSuccess) {
+          if (!shouldRepeatSuccess && retryRandomPromptInput.checked) {
             const randomized = optionsWithRandomPrompt(requestOptions);
             requestOptions = randomized.options;
             retryPreset = randomized.preset;
@@ -1217,9 +1294,11 @@
           const delay = retryDelay(response, retryNumber);
           const reason = shouldRepeatSuccess
             ? "生成成功，继续生成"
-            : response
-              ? `HTTP ${response.status}`
-              : "网络连接失败";
+            : blockedBySafety
+              ? "安全审核拦截"
+              : response
+                ? `HTTP ${response.status}`
+                : "网络连接失败";
           const promptNote = retryPreset ? `，改用第${retryPreset.number}张提示词` : "";
           setMessage(`${reason}${promptNote}，${(delay / 1000).toFixed(1)} 秒后自动重试 (${retryNumber}/${maxRetries})...`, !shouldRepeatSuccess);
           await waitForRetry(delay, options.signal);
@@ -1362,6 +1441,10 @@
             clearResult();
             setMessage(`已删除第 ${index + 1} 张输入图片。`);
           });
+          thumb.addEventListener("click", () => {
+            lightboxImage.src = src;
+            lightbox.hidden = false;
+          });
           thumb.append(badge, img, remove);
           sourceList.appendChild(thumb);
         });
@@ -1376,14 +1459,41 @@
         downloadLink.hidden = true;
       }
 
+      let configuredThirdOpenAIProfiles = [];
+
+      function isThirdOpenAIProvider(value = providerInput.value) {
+        return value.startsWith("openai-profile:");
+      }
+
+      function selectedThirdOpenAIProfile() {
+        if (!isThirdOpenAIProvider()) return null;
+        const id = providerInput.value.slice("openai-profile:".length);
+        return configuredThirdOpenAIProfiles.find((profile) => profile.id === id) || null;
+      }
+
+      function syncOpenAIModelForProvider() {
+        const profile = selectedThirdOpenAIProfile();
+        const model = profile?.model || "gpt-image-2";
+        let option = [...openaiModelInput.options].find((item) => item.value === model);
+        if (!option) {
+          option = document.createElement("option");
+          option.value = model;
+          openaiModelInput.appendChild(option);
+        }
+        option.textContent = model;
+        openaiModelInput.value = model;
+      }
+
       function updateProviderFields() {
-        const isOpenAI = providerInput.value === "openai" || providerInput.value === "yunwu";
+        const isOpenAI = providerInput.value === "openai" || providerInput.value === "yunwu" || isThirdOpenAIProvider();
         const isThirdGrok = providerInput.value === "third-grok";
+        const supportsBatch = isOpenAI && selectedThirdOpenAIProfile()?.mode !== "tasks";
+        syncOpenAIModelForProvider();
         openaiModelInput.hidden = !isOpenAI;
         modelInput.hidden = isOpenAI || isThirdGrok;
         customGrokModelInput.hidden = !isThirdGrok;
-        batchMode.hidden = !isOpenAI;
-        if (!isOpenAI && batchMode.value === "batch") {
+        batchMode.hidden = !supportsBatch;
+        if (!supportsBatch && batchMode.value === "batch") {
           batchMode.value = "single";
           promptInput.placeholder = "What do you want to see...";
         }
@@ -1395,6 +1505,7 @@
       }
 
       function getInputLimit() {
+        if (selectedThirdOpenAIProfile()?.mode === "tasks") return 16;
         if (providerInput.value === "xai") return 1;
         if (providerInput.value === "third-grok") return 3;
         return 10;
@@ -1532,25 +1643,127 @@
         setMessage(`已加入 ${accepted.length} 张图片，共 ${state.inputImages.length} 张。${dropped > 0 ? `已忽略 ${dropped} 张超限图片。` : ""}`);
       }
 
+      function fillOpenAIProfileForm(profile) {
+        openAIProfileName.value = profile?.name || "";
+        openAIProfileKey.value = "";
+        openAIProfileBaseUrl.value = profile?.baseUrl || "https://api.zhongzhuan.chat/v1";
+        openAIProfileModel.value = profile?.model || "gpt-image-2";
+        openAIProfileMode.value = profile?.mode || "edits";
+        openAIProfileResolution.value = profile?.resolution || "2k";
+        openAIProfileResolutionRow.hidden = openAIProfileMode.value !== "tasks";
+        deleteOpenAIProfile.disabled = !profile;
+        saveOpenAIProfile.textContent = profile ? "保存修改" : "添加配置";
+      }
+
+      function renderThirdOpenAIProfiles(profiles) {
+        const previousProvider = providerInput.value;
+        const previousEditorId = openAIProfileSelect.value;
+        configuredThirdOpenAIProfiles = Array.isArray(profiles) ? profiles : [];
+        thirdOpenAIOptions.innerHTML = "";
+        openAIProfileSelect.innerHTML = '<option value="">新增配置</option>';
+
+        configuredThirdOpenAIProfiles.forEach((profile) => {
+          const providerOption = document.createElement("option");
+          providerOption.value = `openai-profile:${profile.id}`;
+          providerOption.textContent = `${profile.name}${profile.mode === "tasks" ? " · 异步任务" : ""}`;
+          thirdOpenAIOptions.appendChild(providerOption);
+
+          const editorOption = document.createElement("option");
+          editorOption.value = profile.id;
+          editorOption.textContent = `${profile.name}${profile.mode === "tasks" ? " · 异步任务" : ""}${profile.saved ? ` (${profile.masked})` : ""}`;
+          openAIProfileSelect.appendChild(editorOption);
+        });
+
+        const storedProvider = localStorage.getItem("desktop_provider") || "";
+        const availableValues = [...providerInput.options].map((option) => option.value);
+        let nextProvider = availableValues.includes(previousProvider) ? previousProvider : "";
+        if (storedProvider && availableValues.includes(storedProvider)) nextProvider = storedProvider;
+        if ((!storedProvider && previousProvider === "openai") || previousProvider === "yunwu") {
+          nextProvider = configuredThirdOpenAIProfiles[0] ? `openai-profile:${configuredThirdOpenAIProfiles[0].id}` : "openai";
+        }
+        providerInput.value = nextProvider || "openai";
+
+        const activeProfileId = isThirdOpenAIProvider(providerInput.value)
+          ? providerInput.value.slice("openai-profile:".length)
+          : "";
+        const editorId = configuredThirdOpenAIProfiles.some((profile) => profile.id === previousEditorId)
+          ? previousEditorId
+          : configuredThirdOpenAIProfiles.some((profile) => profile.id === activeProfileId)
+            ? activeProfileId
+            : configuredThirdOpenAIProfiles[0]?.id || "";
+        openAIProfileSelect.value = editorId;
+        fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === editorId));
+        updateProviderFields();
+      }
+
       async function refreshKeyStatus() {
         const response = await fetch(`${API_BASE}/api/key`);
         const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "读取 API 配置失败。");
+        renderThirdOpenAIProfiles(data.thirdOpenAIProfiles || []);
         const xaiText = data.saved ? `xAI ${data.masked}` : "xAI 未保存";
         const openaiText = data.openaiSaved ? `OpenAI ${data.openaiMasked}` : "OpenAI 未保存";
-        const yunwuText = data.yunwuSaved ? `第三方 OpenAI ${data.yunwuMasked}` : "第三方 OpenAI 未保存";
+        const thirdOpenAIText = configuredThirdOpenAIProfiles.length
+          ? `第三方 GPT ${configuredThirdOpenAIProfiles.length} 条`
+          : "第三方 GPT 未配置";
         const thirdGrokText = data.thirdGrokSaved ? `第三方 Grok ${data.thirdGrokMasked}` : "第三方 Grok 未保存";
-        keyStatus.textContent = `${openaiText} / ${yunwuText} / ${xaiText} / ${thirdGrokText}`;
+        keyStatus.textContent = `${openaiText} / ${thirdOpenAIText} / ${xaiText} / ${thirdGrokText}`;
         openaiKeyStatus.textContent = data.openaiSaved
           ? `OpenAI key 已保存：${data.openaiMasked}`
           : "OpenAI key 尚未保存";
-        openaiKeyStatus.textContent += data.yunwuSaved
-          ? `；第三方 OpenAI key 已保存：${data.yunwuMasked}`
-          : "；第三方 OpenAI key 尚未保存";
+        openaiKeyStatus.textContent += `；第三方 GPT 配置 ${configuredThirdOpenAIProfiles.length} 条`;
         openaiKeyStatus.textContent += data.thirdGrokSaved
           ? `；第三方 Grok key 已保存：${data.thirdGrokMasked}`
           : "；第三方 Grok key 尚未保存";
-        yunwuBaseUrl.value = data.yunwuBaseUrl || "https://api.zhongzhuan.chat/v1";
         thirdGrokBaseUrl.value = data.thirdGrokBaseUrl || "https://api.x.ai/v1";
+      }
+
+      async function saveThirdOpenAIProfile() {
+        const selectedId = openAIProfileSelect.value;
+        setMessage("正在保存第三方 GPT 配置...");
+        const response = await fetch(`${API_BASE}/api/openai-profiles`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: selectedId,
+            name: openAIProfileName.value,
+            apiKey: openAIProfileKey.value,
+            baseUrl: openAIProfileBaseUrl.value,
+            model: openAIProfileModel.value,
+            mode: openAIProfileMode.value,
+            resolution: openAIProfileResolution.value,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "第三方 GPT 配置保存失败。", true);
+          return;
+        }
+        await refreshKeyStatus();
+        if (data.profile?.id) {
+          openAIProfileSelect.value = data.profile.id;
+          fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === data.profile.id));
+          providerInput.value = `openai-profile:${data.profile.id}`;
+          localStorage.setItem("desktop_provider", providerInput.value);
+          updateProviderFields();
+        }
+        setMessage("第三方 GPT 配置已保存。");
+      }
+
+      async function removeThirdOpenAIProfile() {
+        const id = openAIProfileSelect.value;
+        if (!id) return;
+        const profile = configuredThirdOpenAIProfiles.find((item) => item.id === id);
+        if (!confirm(`确定删除“${profile?.name || "该配置"}”吗？`)) return;
+        const response = await fetch(`${API_BASE}/api/openai-profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "删除失败。", true);
+          return;
+        }
+        localStorage.removeItem("desktop_provider");
+        await refreshKeyStatus();
+        setMessage("第三方 GPT 配置已删除。");
       }
 
       async function saveProviderKey(provider, value, baseUrl = "") {
@@ -1567,7 +1780,6 @@
         }
         apiKey.value = "";
         openaiApiKey.value = "";
-        yunwuApiKey.value = "";
         thirdGrokApiKey.value = "";
         await refreshKeyStatus();
         setMessage("API key 已保存。");
@@ -1582,11 +1794,21 @@
         setMessage("已清空输入图片。");
       });
       imageFile.addEventListener("change", () => loadImageFiles(imageFile.files));
-      providerInput.addEventListener("change", updateProviderFields);
+      providerInput.addEventListener("change", () => {
+        localStorage.setItem("desktop_provider", providerInput.value);
+        updateProviderFields();
+      });
+      openAIProfileSelect.addEventListener("change", () => {
+        const profile = configuredThirdOpenAIProfiles.find((item) => item.id === openAIProfileSelect.value);
+        fillOpenAIProfileForm(profile);
+      });
+      openAIProfileMode.addEventListener("change", () => {
+        openAIProfileResolutionRow.hidden = openAIProfileMode.value !== "tasks";
+      });
+      saveOpenAIProfile.addEventListener("click", saveThirdOpenAIProfile);
+      deleteOpenAIProfile.addEventListener("click", removeThirdOpenAIProfile);
       saveKey.addEventListener("click", () => saveProviderKey("xai", apiKey.value));
       saveOpenAIKey.addEventListener("click", () => saveProviderKey("openai", openaiApiKey.value));
-      saveYunwuKey.addEventListener("click", () => saveProviderKey("yunwu", yunwuApiKey.value, yunwuBaseUrl.value));
-      saveYunwuUrl.addEventListener("click", () => saveProviderKey("yunwu-url", "", yunwuBaseUrl.value));
       saveThirdGrokKey.addEventListener("click", () => saveProviderKey("third-grok", thirdGrokApiKey.value, thirdGrokBaseUrl.value));
       saveThirdGrokUrl.addEventListener("click", () => saveProviderKey("third-grok-url", "", thirdGrokBaseUrl.value));
 
@@ -1603,6 +1825,11 @@
       });
 
       keysButton.addEventListener("click", () => {
+        const activeProfile = selectedThirdOpenAIProfile();
+        if (activeProfile) {
+          openAIProfileSelect.value = activeProfile.id;
+          fillOpenAIProfileForm(activeProfile);
+        }
         keysModal.hidden = false;
       });
       closeKeys.addEventListener("click", () => {
@@ -1610,6 +1837,22 @@
       });
       keysModal.addEventListener("click", (event) => {
         if (event.target === keysModal) keysModal.hidden = true;
+      });
+
+      resultImage.addEventListener("click", () => {
+        if (resultImage.src && !resultImage.hidden) {
+          lightboxImage.src = resultImage.src;
+          lightbox.hidden = false;
+        }
+      });
+      lightbox.addEventListener("click", () => {
+        lightbox.hidden = true;
+      });
+      lightboxImage.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !lightbox.hidden) lightbox.hidden = true;
       });
 
       rawToggle.addEventListener("click", () => {
@@ -1703,7 +1946,8 @@
           if (!response.ok) {
             rawOutput.hidden = false;
             const errorMessage = typeof data.error === "string" ? data.error : data.error?.message || data.message || "编辑失败。";
-            if (isSafetyBlockText(JSON.stringify(data))) {
+            const shouldReplaceFailedPrompt = autoRetryInput.checked && retryRandomPromptInput.checked;
+            if (shouldReplaceFailedPrompt && isSafetyBlockText(JSON.stringify(data))) {
               const suggestedPreset = selectRandomPromptPreset(promptInput.value);
               applyPromptPreset(suggestedPreset);
               setMessage(`${errorMessage} 已改用第${suggestedPreset.number}张提示词，请确认后再次点击生成。用时 ${elapsedForSession(currentSid)}`, true);
@@ -1919,6 +2163,41 @@
       const sessionList = document.querySelector("#sessionList");
 
       let allSessions = [];
+      const SESSION_CACHE_KEY = "desktop_session_briefs";
+      let sessionRecoveryPending = false;
+      let sessionFilterQuery = "";
+      let sessionSearchFocused = false;
+
+      function sessionsForCurrentSearch() {
+        if (!sessionFilterQuery) return allSessions;
+        return allSessions.filter((session) => String(session.prompt || session.title || "").toLowerCase().includes(sessionFilterQuery));
+      }
+
+      function renderCurrentSessionList() {
+        renderSessions(sessionsForCurrentSearch());
+      }
+
+      const sessionListObserver = new MutationObserver(() => {
+        if (sessionRecoveryPending || sessionFilterQuery || !allSessions.length) return;
+        if (sessionList.querySelector(".sidebar-item")) return;
+        sessionRecoveryPending = true;
+        queueMicrotask(() => {
+          sessionRecoveryPending = false;
+          if (!sessionFilterQuery && allSessions.length && !sessionList.querySelector(".sidebar-item")) {
+            renderSessions(allSessions);
+            setMessage("会话列表已自动恢复。", true);
+          }
+        });
+      });
+      sessionListObserver.observe(sessionList, { childList: true });
+
+      try {
+        const cachedSessions = JSON.parse(localStorage.getItem(SESSION_CACHE_KEY) || "[]");
+        if (Array.isArray(cachedSessions) && cachedSessions.length) {
+          allSessions = cachedSessions;
+          renderCurrentSessionList();
+        }
+      } catch {}
 
       function formatTime(iso) {
         if (!iso) return "";
@@ -1935,10 +2214,12 @@
             body: JSON.stringify({ title: "新会话" }),
           });
           const data = await response.json();
+          if (!response.ok || !data.id) throw new Error(data.error || "创建会话失败。");
           state.currentSessionId = data.id;
           await loadSessions();
-        } catch {
+        } catch (error) {
           state.currentSessionId = null;
+          setMessage(error.message || "创建会话失败。", true);
         }
       }
 
@@ -1958,14 +2239,22 @@
       async function loadSessions() {
         try {
           const response = await fetch(`${API_BASE}/api/sessions`);
-          allSessions = await response.json();
-          renderSessions(allSessions);
-        } catch {
-          sessionList.innerHTML = '<div class="sidebar-empty">加载失败</div>';
+          const sessions = await response.json();
+          if (!response.ok) throw new Error(sessions.error || "加载会话失败。");
+          if (!Array.isArray(sessions)) throw new Error("会话列表格式无效。");
+          allSessions = sessions;
+          localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(allSessions));
+          renderCurrentSessionList();
+        } catch (error) {
+          if (!allSessions.length && !sessionList.children.length) {
+            sessionList.innerHTML = '<div class="sidebar-empty">加载失败，请重试</div>';
+          }
+          setMessage(error.message || "加载会话失败，已保留当前列表。", true);
         }
       }
 
       function renderSessions(sessions) {
+        if (!Array.isArray(sessions)) return;
         if (!sessions.length) {
           sessionList.innerHTML = '<div class="sidebar-empty">暂无会话记录</div>';
           return;
@@ -2064,10 +2353,16 @@
           item.appendChild(deleteBtn);
 
           item.addEventListener("click", async () => {
+            if (!sessionFilterQuery) sessionSearch.value = "";
+            sidebarEl.classList.remove("collapsed");
+            document.body.classList.remove("sidebar-collapsed");
+            sidebarExpand.hidden = true;
             await saveCurrentSessionPrompt();
             try {
               const resp = await fetch(`${API_BASE}/api/sessions/${s.id}`);
               const detail = await resp.json();
+              if (!resp.ok) throw new Error(detail.error || "加载会话详情失败。");
+              if (!detail || detail.id !== s.id) throw new Error("会话详情格式无效。");
               state.currentSessionId = s.id;
               if (detail.prompt) promptInput.value = detail.prompt;
               state.inputImages = [];
@@ -2090,11 +2385,16 @@
               } else {
                 setMessage("已加载会话记录。");
               }
-              sessionList.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
+              sessionList.querySelectorAll(".sidebar-item").forEach((element) => element.classList.remove("active"));
               item.classList.add("active");
+              requestAnimationFrame(() => {
+                if (!sessionFilterQuery && allSessions.length && !sessionList.querySelector(".sidebar-item")) {
+                  renderSessions(allSessions);
+                }
+              });
               syncEditButtonState();
-            } catch {
-              setMessage("加载会话详情失败。", true);
+            } catch (error) {
+              setMessage(error.message || "加载会话详情失败。", true);
             }
           });
 
@@ -2102,15 +2402,26 @@
         }
       }
 
+      sessionSearch.value = "";
+      sessionSearch.addEventListener("focus", () => {
+        sessionSearchFocused = true;
+        sessionSearch.readOnly = false;
+        if (!sessionFilterQuery) sessionSearch.value = "";
+      });
+      sessionSearch.addEventListener("blur", () => {
+        sessionSearchFocused = false;
+      });
       sessionSearch.addEventListener("input", () => {
-        const q = sessionSearch.value.trim().toLowerCase();
-        if (!q) {
-          renderSessions(allSessions);
+        if (!sessionSearchFocused) {
+          sessionSearch.value = sessionFilterQuery;
           return;
         }
-        const filtered = allSessions.filter((s) => (s.prompt || "").toLowerCase().includes(q));
-        renderSessions(filtered);
+        sessionFilterQuery = sessionSearch.value.trim().toLowerCase();
+        renderCurrentSessionList();
       });
+      setTimeout(() => {
+        if (!sessionSearchFocused && !sessionFilterQuery) sessionSearch.value = "";
+      }, 500);
 
       newSessionButton.addEventListener("click", async () => {
         await saveCurrentSessionPrompt();
@@ -2139,7 +2450,12 @@
 
       loadSessions().then(() => {
         if (!state.currentSessionId) {
-          createNewSession();
+          if (allSessions.length) {
+            state.currentSessionId = allSessions[0].id;
+            renderCurrentSessionList();
+          } else {
+            createNewSession();
+          }
         }
       });
     </script>

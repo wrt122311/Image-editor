@@ -6,6 +6,24 @@ const { spawn } = require("child_process");
 
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = __dirname;
+
+function pad(n) {
+  return n.toString().padStart(2, "0");
+}
+
+function now() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function log(msg, ...args) {
+  const timestamp = now();
+  if (args.length) {
+    console.log(`[${timestamp}] ${msg}`, ...args);
+  } else {
+    console.log(`[${timestamp}] ${msg}`);
+  }
+}
 const CONFIG_PATH = path.join(ROOT, ".xai-config.json");
 const INPUT_DIR = path.join(ROOT, "input");
 const OUTPUT_DIR = path.join(ROOT, "output");
@@ -66,16 +84,94 @@ async function saveConfig(config) {
   await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
 }
 
+function thirdOpenAIProfiles(config) {
+  const profiles = Array.isArray(config.thirdOpenAIProfiles)
+    ? config.thirdOpenAIProfiles
+        .filter((profile) => profile && profile.id)
+        .map((profile) => ({
+          id: String(profile.id),
+          name: String(profile.name || "第三方 GPT"),
+          apiKey: String(profile.apiKey || ""),
+          baseUrl: String(profile.baseUrl || YUNWU_BASE_URL).replace(/\/+$/, ""),
+          model: String(profile.model || "gpt-image-2"),
+          mode: profile.mode === "tasks" ? "tasks" : "edits",
+          resolution: ["1k", "2k", "4k"].includes(String(profile.resolution).toLowerCase())
+            ? String(profile.resolution).toLowerCase()
+            : "2k",
+        }))
+    : [];
+  if (!profiles.length && (config.yunwuApiKey || config.yunwuBaseUrl)) {
+    profiles.push({
+      id: "legacy-yunwu",
+      name: "默认第三方 GPT",
+      apiKey: String(config.yunwuApiKey || ""),
+      baseUrl: String(config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, ""),
+      model: "gpt-image-2",
+      mode: "edits",
+      resolution: "2k",
+    });
+  }
+  return profiles;
+}
+
+function publicThirdOpenAIProfiles(config) {
+  return thirdOpenAIProfiles(config).map((profile) => ({
+    id: profile.id,
+    name: profile.name,
+    baseUrl: profile.baseUrl,
+    model: profile.model,
+    mode: profile.mode,
+    resolution: profile.resolution,
+    saved: Boolean(profile.apiKey),
+    masked: maskKey(profile.apiKey),
+  }));
+}
+
+function thirdOpenAIProfileId(provider) {
+  return provider.startsWith("openai-profile:") ? provider.slice("openai-profile:".length) : "";
+}
+
+function resolveThirdOpenAIProfile(config, provider) {
+  const id = thirdOpenAIProfileId(provider);
+  return id ? thirdOpenAIProfiles(config).find((profile) => profile.id === id) || null : null;
+}
+
 async function readSessions() {
   try {
     return JSON.parse(await fs.readFile(SESSIONS_PATH, "utf8"));
-  } catch {
-    return [];
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw new Error(`会话记录读取失败: ${error.message}`);
   }
 }
 
 async function saveSessions(sessions) {
-  await fs.writeFile(SESSIONS_PATH, JSON.stringify(sessions, null, 2), "utf8");
+  const tempPath = `${SESSIONS_PATH}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  try {
+    await fs.writeFile(tempPath, JSON.stringify(sessions, null, 2), "utf8");
+    await fs.rename(tempPath, SESSIONS_PATH);
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+let sessionMutationQueue = Promise.resolve();
+
+function mutateSessions(mutator) {
+  const operation = sessionMutationQueue.then(async () => {
+    const sessions = await readSessions();
+    const result = await mutator(sessions);
+    await saveSessions(sessions);
+    return result;
+  });
+  sessionMutationQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function readSessionsStable() {
+  await sessionMutationQueue;
+  return readSessions();
 }
 
 function generateId() {
@@ -83,20 +179,20 @@ function generateId() {
 }
 
 async function addSession(sessionData) {
-  const sessions = await readSessions();
-  sessions.unshift(sessionData);
-  if (sessions.length > 200) sessions.length = 200;
-  await saveSessions(sessions);
-  return sessionData.id;
+  return mutateSessions((sessions) => {
+    sessions.unshift(sessionData);
+    if (sessions.length > 200) sessions.length = 200;
+    return sessionData.id;
+  });
 }
 
 async function updateSession(id, updates) {
-  const sessions = await readSessions();
-  const session = sessions.find((s) => s.id === id);
-  if (session) {
+  return mutateSessions((sessions) => {
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return false;
     Object.assign(session, updates);
-    await saveSessions(sessions);
-  }
+    return true;
+  });
 }
 
 async function makeThumb(srcPath, thumbPath) {
@@ -582,6 +678,179 @@ async function postToXaiWithPowerShell(apiKey, payload, endpoint = XAI_EDIT_URL)
   });
 }
 
+async function uploadTaskImage(apiKey, filePath, baseUrl) {
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/uploads/images`;
+  if (process.platform !== "win32") {
+    const form = new FormData();
+    const buffer = await fs.readFile(filePath);
+    const extension = path.extname(filePath).toLowerCase();
+    const mime = extension === ".png" ? "image/png" : extension === ".webp" ? "image/webp" : "image/jpeg";
+    form.append("file", new Blob([buffer], { type: mime }), path.basename(filePath));
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, data: parseMaybeJson(text) };
+  }
+
+  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || (await getWindowsProxy());
+  const args = ["-sS"];
+  if (proxy) args.push("--proxy", proxy);
+  args.push(
+    endpoint,
+    "-H", `Authorization: Bearer ${apiKey}`,
+    "-F", `file=@${filePath}`,
+    "-w", "\nHTTP_STATUS:%{http_code}",
+  );
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("curl.exe", args, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const statusMatch = stdout.match(/\nHTTP_STATUS:(\d+)\s*$/);
+      const status = statusMatch ? Number(statusMatch[1]) : 0;
+      const responseBody = statusMatch ? stdout.slice(0, statusMatch.index) : stdout;
+      const data = parseMaybeJson(responseBody);
+      if (code !== 0 || !status) {
+        reject(new Error(stderr || apiErrorMessage(data) || responseBody || "参考图上传失败。"));
+        return;
+      }
+      resolve({ ok: status >= 200 && status < 300, status, data });
+    });
+  });
+}
+
+async function getJsonEndpoint(apiKey, endpoint) {
+  if (process.platform !== "win32") {
+    const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${apiKey}` } });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, data: parseMaybeJson(text) };
+  }
+
+  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || (await getWindowsProxy());
+  const args = ["-sS"];
+  if (proxy) args.push("--proxy", proxy);
+  args.push(endpoint, "-H", `Authorization: Bearer ${apiKey}`, "-w", "\nHTTP_STATUS:%{http_code}");
+  return new Promise((resolve, reject) => {
+    const child = spawn("curl.exe", args, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const statusMatch = stdout.match(/\nHTTP_STATUS:(\d+)\s*$/);
+      const status = statusMatch ? Number(statusMatch[1]) : 0;
+      const responseBody = statusMatch ? stdout.slice(0, statusMatch.index) : stdout;
+      const data = parseMaybeJson(responseBody);
+      if (code !== 0 || !status) {
+        reject(new Error(stderr || apiErrorMessage(data) || responseBody || "任务查询失败。"));
+        return;
+      }
+      resolve({ ok: status >= 200 && status < 300, status, data });
+    });
+  });
+}
+
+function taskImageSettings(size, configuredResolution) {
+  const mapping = {
+    "1024x1024": ["1:1", "1k"],
+    "1024x1536": ["2:3", "1k"],
+    "1536x1024": ["3:2", "1k"],
+    "2048x2048": ["1:1", "2k"],
+    "2048x1152": ["16:9", "2k"],
+    "3840x2160": ["16:9", "4k"],
+    "2160x3840": ["9:16", "4k"],
+  };
+  const [ratio, inferredResolution] = mapping[size] || [size === "auto" ? "auto" : size, configuredResolution];
+  return {
+    size: ratio,
+    resolution: size.startsWith("2048x") || size.startsWith("3840x") || size.startsWith("2160x")
+      ? inferredResolution
+      : configuredResolution,
+  };
+}
+
+async function runAsyncImageTask(apiKey, profile, filePaths, params) {
+  const uploadedUrls = [];
+  for (const filePath of filePaths) {
+    const upload = await uploadTaskImage(apiKey, filePath, profile.baseUrl);
+    if (!upload.ok || !upload.data?.url) {
+      return {
+        ok: false,
+        status: upload.status || 502,
+        data: upload.data || { error: "参考图上传后没有返回 URL。" },
+      };
+    }
+    uploadedUrls.push(upload.data.url);
+  }
+
+  const imageSettings = taskImageSettings(params.size, profile.resolution);
+  const payload = {
+    model: profile.model,
+    prompt: params.prompt,
+    n: params.n,
+    size: imageSettings.size,
+    resolution: imageSettings.resolution,
+    quality: params.quality,
+    output_format: params.output_format,
+    background: params.background,
+    moderation: params.moderation,
+    image_urls: uploadedUrls,
+  };
+  const endpoint = `${profile.baseUrl}/images/generations`;
+  const submission = await postToXai(apiKey, payload, endpoint);
+  if (!submission.ok) return { ...submission, request: payload };
+
+  const submittedItems = Array.isArray(submission.data?.data) ? submission.data.data : [submission.data?.data || submission.data];
+  const taskId = submittedItems.find((item) => item?.task_id || item?.id)?.task_id
+    || submittedItems.find((item) => item?.task_id || item?.id)?.id;
+  if (!taskId) {
+    return { ok: false, status: 502, data: { error: "异步接口未返回 task_id。", details: submission.data }, request: payload };
+  }
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    const taskResponse = await getJsonEndpoint(apiKey, `${profile.baseUrl}/tasks/${encodeURIComponent(taskId)}?language=zh`);
+    if (!taskResponse.ok) return { ...taskResponse, request: payload };
+    const task = taskResponse.data?.data || taskResponse.data;
+    if (task?.status === "failed" || task?.status === "cancelled") {
+      return {
+        ok: false,
+        status: 422,
+        data: { error: task.error?.message || task.fail_reason || `任务${task.status}。`, task },
+        request: payload,
+      };
+    }
+    if (task?.status === "completed") {
+      const imageItems = Array.isArray(task.result?.images) ? task.result.images : [];
+      const urls = imageItems.flatMap((item) => Array.isArray(item?.url) ? item.url : item?.url ? [item.url] : []);
+      if (!urls.length) {
+        return { ok: false, status: 502, data: { error: "任务已完成，但没有返回图片 URL。", task }, request: payload };
+      }
+      return {
+        ok: true,
+        status: 200,
+        data: { data: urls.map((url) => ({ url })), task_id: taskId, task },
+        request: payload,
+      };
+    }
+  }
+
+  return { ok: false, status: 504, data: { error: "异步图片任务等待超时。", task_id: taskId }, request: payload };
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -606,6 +875,7 @@ async function serveStatic(req, res) {
 
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  log(`${req.method} ${url.pathname}${url.search || ""}`);
 
   try {
     if (req.method === "OPTIONS") {
@@ -628,6 +898,7 @@ async function handleRequest(req, res) {
         yunwuSaved: Boolean(config.yunwuApiKey),
         yunwuMasked: maskKey(config.yunwuApiKey),
         yunwuBaseUrl: config.yunwuBaseUrl || YUNWU_BASE_URL,
+        thirdOpenAIProfiles: publicThirdOpenAIProfiles(config),
         thirdGrokSaved: Boolean(config.thirdGrokApiKey),
         thirdGrokMasked: maskKey(config.thirdGrokApiKey),
         thirdGrokBaseUrl: config.thirdGrokBaseUrl || XAI_BASE_URL,
@@ -661,6 +932,7 @@ async function handleRequest(req, res) {
         config.apiKey = apiKey;
       }
       await saveConfig(config);
+      log(`API key 已保存 (${provider})`);
       sendJson(res, 200, {
         saved: true,
         masked: maskKey(apiKey),
@@ -670,12 +942,71 @@ async function handleRequest(req, res) {
       return;
     }
 
+    const openAIProfileMatch = url.pathname.match(/^\/api\/openai-profiles(?:\/([^/]+))?$/);
+    if (openAIProfileMatch) {
+      const profileId = openAIProfileMatch[1] ? decodeURIComponent(openAIProfileMatch[1]) : "";
+
+      if (req.method === "POST" && !profileId) {
+        const body = await readJson(req);
+        const config = await readConfig();
+        const profiles = thirdOpenAIProfiles(config);
+        const id = String(body.id || generateId()).trim();
+        const existingIndex = profiles.findIndex((profile) => profile.id === id);
+        const existing = existingIndex >= 0 ? profiles[existingIndex] : null;
+        const profile = {
+          id,
+          name: String(body.name || existing?.name || `第三方 GPT ${profiles.length + 1}`).trim(),
+          apiKey: String(body.apiKey || existing?.apiKey || "").trim(),
+          baseUrl: String(body.baseUrl || existing?.baseUrl || YUNWU_BASE_URL).trim().replace(/\/+$/, ""),
+          model: String(body.model || existing?.model || "gpt-image-2").trim(),
+          mode: body.mode === "tasks" ? "tasks" : "edits",
+          resolution: ["1k", "2k", "4k"].includes(String(body.resolution || existing?.resolution || "2k").toLowerCase())
+            ? String(body.resolution || existing?.resolution || "2k").toLowerCase()
+            : "2k",
+        };
+        if (!profile.name || !profile.apiKey || !profile.baseUrl || !profile.model) {
+          sendJson(res, 400, { error: "名称、API key、Base URL 和模型名不能为空。" });
+          return;
+        }
+        if (existingIndex >= 0) profiles[existingIndex] = profile;
+        else profiles.push(profile);
+        config.thirdOpenAIProfiles = profiles;
+        await saveConfig(config);
+        log(`第三方 GPT 配置已保存: ${profile.name} (${profile.id})`);
+        sendJson(res, 200, { saved: true, profile: publicThirdOpenAIProfiles(config).find((item) => item.id === id) });
+        return;
+      }
+
+      if (req.method === "DELETE" && profileId) {
+        const config = await readConfig();
+        const profiles = thirdOpenAIProfiles(config);
+        const index = profiles.findIndex((profile) => profile.id === profileId);
+        if (index === -1) {
+          sendJson(res, 404, { error: "第三方 GPT 配置不存在。" });
+          return;
+        }
+        const [removed] = profiles.splice(index, 1);
+        config.thirdOpenAIProfiles = profiles;
+        if (profileId === "legacy-yunwu") {
+          delete config.yunwuApiKey;
+          delete config.yunwuBaseUrl;
+        }
+        await saveConfig(config);
+        log(`第三方 GPT 配置已删除: ${removed.name} (${profileId})`);
+        sendJson(res, 200, { deleted: true });
+        return;
+      }
+
+      sendJson(res, 405, { error: "不支持的操作。" });
+      return;
+    }
+
     const sessionMatch = url.pathname.match(/^\/api\/sessions(?:\/(.+))?$/);
     if (sessionMatch) {
       const sessionId = sessionMatch[1];
 
       if (req.method === "GET" && !sessionId) {
-        const sessions = await readSessions();
+        const sessions = await readSessionsStable();
         const briefs = sessions.map((s) => ({
           id: s.id,
           createdAt: s.createdAt,
@@ -691,7 +1022,7 @@ async function handleRequest(req, res) {
       }
 
       if (req.method === "GET" && sessionId) {
-        const sessions = await readSessions();
+        const sessions = await readSessionsStable();
         const session = sessions.find((s) => s.id === sessionId);
         if (!session) {
           sendJson(res, 404, { error: "会话不存在。" });
@@ -703,15 +1034,17 @@ async function handleRequest(req, res) {
 
       if (req.method === "PATCH" && sessionId) {
         const body = await readJson(req);
-        const sessions = await readSessions();
-        const session = sessions.find((s) => s.id === sessionId);
-        if (!session) {
+        const updated = await mutateSessions((sessions) => {
+          const session = sessions.find((s) => s.id === sessionId);
+          if (!session) return false;
+          if (body.title !== undefined) session.title = body.title;
+          if (body.prompt !== undefined) session.prompt = body.prompt;
+          return true;
+        });
+        if (!updated) {
           sendJson(res, 404, { error: "会话不存在。" });
           return;
         }
-        if (body.title !== undefined) session.title = body.title;
-        if (body.prompt !== undefined) session.prompt = body.prompt;
-        await saveSessions(sessions);
         sendJson(res, 200, { updated: true });
         return;
       }
@@ -733,30 +1066,37 @@ async function handleRequest(req, res) {
           thumbnailPaths: [],
         };
         await addSession(newSession);
+        log(`会话已创建: ${newSession.id}`);
         sendJson(res, 200, { id: newSession.id });
         return;
       }
 
       if (req.method === "DELETE" && sessionId) {
-        const sessions = await readSessions();
-        const index = sessions.findIndex((s) => s.id === sessionId);
-        if (index === -1) {
+        const removed = await mutateSessions((sessions) => {
+          const index = sessions.findIndex((s) => s.id === sessionId);
+          if (index === -1) return null;
+          return sessions.splice(index, 1)[0];
+        });
+        if (!removed) {
           sendJson(res, 404, { error: "会话不存在。" });
           return;
         }
-        const removed = sessions.splice(index, 1)[0];
         if (removed.thumbnailPaths) {
           for (const p of removed.thumbnailPaths) {
             await fs.rm(p, { force: true }).catch(() => {});
           }
         }
-        await saveSessions(sessions);
+        log(`会话已删除: ${sessionId}`);
         sendJson(res, 200, { deleted: true });
         return;
       }
 
       if (req.method === "DELETE" && !sessionId) {
-        const sessions = await readSessions();
+        const sessions = await mutateSessions((currentSessions) => {
+          const removed = currentSessions.slice();
+          currentSessions.length = 0;
+          return removed;
+        });
         for (const s of sessions) {
           if (s.thumbnailPaths) {
             for (const p of s.thumbnailPaths) {
@@ -764,7 +1104,7 @@ async function handleRequest(req, res) {
             }
           }
         }
-        await saveSessions([]);
+        log("所有会话已清空");
         sendJson(res, 200, { deleted: true });
         return;
       }
@@ -803,8 +1143,10 @@ async function handleRequest(req, res) {
       const body = await readJson(req);
       const provider = String(body.provider || "xai").trim();
       const prompt = String(body.prompt || "").trim();
+      const selectedThirdOpenAI = resolveThirdOpenAIProfile(config, provider);
+      const requestedThirdOpenAIId = thirdOpenAIProfileId(provider);
       const isGrokProvider = provider === "xai" || provider === "third-grok";
-      const inputLimit = isGrokProvider ? 3 : 10;
+      const inputLimit = selectedThirdOpenAI?.mode === "tasks" ? 16 : isGrokProvider ? 3 : 10;
       const imageUrls = Array.isArray(body.imageUrls)
         ? body.imageUrls.map((value) => String(value || "").trim()).filter(Boolean)
         : [String(body.imageUrl || "").trim()].filter(Boolean);
@@ -812,6 +1154,7 @@ async function handleRequest(req, res) {
       const imageUrl = imageUrls[0] || "";
       const model = String(body.model || "grok-imagine-image-quality").trim();
       const openaiModel = String(body.openaiModel || "gpt-image-2").trim();
+      const effectiveOpenAIModel = selectedThirdOpenAI?.model || openaiModel;
       const n = Math.max(1, Math.min(4, Number(body.n || 1)));
       const aspectRatio = String(body.aspectRatio || body.aspect_ratio || "1:1").trim();
       const resolution = String(body.resolution || "1k").trim();
@@ -822,6 +1165,18 @@ async function handleRequest(req, res) {
       const moderation = String(body.moderation || "low").trim();
       const partialImages = Math.max(0, Math.min(3, Number(body.partialImages || body.partial_images || 0)));
       const inputFidelity = String(body.inputFidelity || body.input_fidelity || "auto").trim();
+
+      const displayProvider = provider === "xai"
+        ? "xAI"
+        : provider === "third-grok"
+          ? "第三方Grok"
+          : selectedThirdOpenAI?.name || (provider === "yunwu" ? "第三方OpenAI" : "OpenAI");
+      log(`图片编辑开始 提供商=${displayProvider} 模型=${isGrokProvider ? model : effectiveOpenAIModel} 图片数=${imageUrls.length} n=${n} prompt="${prompt.slice(0, 60)}${prompt.length > 60 ? "..." : ""}"`);
+
+      if (requestedThirdOpenAIId && !selectedThirdOpenAI) {
+        sendJson(res, 400, { error: "选择的第三方 GPT 配置不存在，请重新选择。" });
+        return;
+      }
 
       if (!prompt) {
         sendJson(res, 400, { error: "请输入图片编辑文字。" });
@@ -838,7 +1193,7 @@ async function handleRequest(req, res) {
           title: prompt.slice(0, 50),
           prompt,
           provider,
-          model: isGrokProvider ? model : openaiModel,
+          model: isGrokProvider ? model : effectiveOpenAIModel,
         });
       }
 
@@ -852,23 +1207,26 @@ async function handleRequest(req, res) {
         await updateSession(sessionId, { inputPaths: savedInputPaths });
       }
 
-      if (provider === "openai" || provider === "yunwu") {
+      if (provider === "openai" || provider === "yunwu" || selectedThirdOpenAI) {
         const isYunwu = provider === "yunwu";
-        const providerApiKey = isYunwu ? config.yunwuApiKey : config.openaiApiKey;
-        const providerName = isYunwu ? "第三方 OpenAI" : "OpenAI";
-        const endpoint = isYunwu
-          ? `${(config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "")}/images/edits`
-          : OPENAI_EDIT_URL;
+        const providerApiKey = selectedThirdOpenAI?.apiKey || (isYunwu ? config.yunwuApiKey : config.openaiApiKey);
+        const providerName = selectedThirdOpenAI?.name || (isYunwu ? "第三方 OpenAI" : "OpenAI");
+        const usesTaskFlow = selectedThirdOpenAI?.mode === "tasks";
+        const endpoint = selectedThirdOpenAI
+          ? `${selectedThirdOpenAI.baseUrl}${usesTaskFlow ? "/images/generations" : "/images/edits"}`
+          : isYunwu
+            ? `${(config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "")}/images/edits`
+            : OPENAI_EDIT_URL;
 
         if (!providerApiKey) {
           sendJson(res, 400, { error: `请先保存 ${providerName} API key。` });
           return;
         }
 
-        const openaiPayload = {
+        let openaiPayload = {
           provider,
           endpoint,
-          model: openaiModel,
+          model: effectiveOpenAIModel,
           prompt,
           n,
           size,
@@ -880,12 +1238,24 @@ async function handleRequest(req, res) {
           input_fidelity: inputFidelity,
           images: savedInputPaths,
         };
+        let openaiResponse;
+        if (usesTaskFlow) {
+          openaiResponse = await runAsyncImageTask(providerApiKey, selectedThirdOpenAI, savedInputPaths, openaiPayload);
+          openaiPayload = {
+            provider,
+            endpoint,
+            mode: "tasks",
+            ...(openaiResponse.request || openaiPayload),
+          };
+        } else {
+          openaiResponse = await postToOpenAIWithCurl(providerApiKey, savedInputPaths, openaiPayload, endpoint);
+        }
         await fs.writeFile(LAST_PAYLOAD_PATH, JSON.stringify(openaiPayload, null, 2), "utf8");
 
-        const openaiResponse = await postToOpenAIWithCurl(providerApiKey, savedInputPaths, openaiPayload, endpoint);
         const data = openaiResponse.data;
         if (!openaiResponse.ok) {
           const errMsg = (typeof data.error === "string" ? data.error : data.error?.message) || data.message || data.raw || "OpenAI 图片编辑请求失败。";
+          log(`OpenAI 编辑失败 (HTTP ${openaiResponse.status}): ${errMsg}`);
           await updateSession(sessionId, {
             success: false,
             error: errMsg,
@@ -931,6 +1301,7 @@ async function handleRequest(req, res) {
           outputThumb: openaiThumb,
           thumbnailPaths: openaiThumbs,
         });
+        log(`OpenAI 编辑成功 输出数=${savedOutputs.length} 输入=${savedInputPath}`);
         sendJson(res, 200, data);
         return;
       }
@@ -1004,6 +1375,7 @@ async function handleRequest(req, res) {
 
       if (!xaiResponse.ok) {
         const errMsg = (typeof data.error === "string" ? data.error : data.error?.message) || data.message || data.raw || "xAI 图片编辑请求失败。";
+        log(`xAI 编辑失败 (HTTP ${xaiResponse.status}): ${errMsg}`);
         await updateSession(sessionId, {
           success: false,
           error: errMsg,
@@ -1044,6 +1416,7 @@ async function handleRequest(req, res) {
         const providerError = apiErrorMessage(data);
         const errMsg = providerError || `${xaiProviderName} 响应里没有可保存的图片数据。`;
         const responseStatus = isSafetyRejection(data) ? 400 : 502;
+        log(`xAI 无输出 (${isSafetyRejection(data) ? "安全审核拦截" : "未知错误"}): ${errMsg}`);
         await updateSession(sessionId, {
           success: false,
           error: errMsg,
@@ -1074,6 +1447,7 @@ async function handleRequest(req, res) {
         outputThumb: xaiThumb,
         thumbnailPaths: xaiThumbs,
       });
+      log(`xAI 编辑成功 输出数=${savedOutputs.length} 输入=${savedInputPath}`);
       sendJson(res, 200, data);
       return;
     }
@@ -1086,11 +1460,12 @@ async function handleRequest(req, res) {
       if (req.method === "POST" && !batchId) {
         const body = await readJson(req);
         const provider = String(body.provider || "openai").trim();
-        if (provider !== "openai" && provider !== "yunwu") {
+        const selectedThirdOpenAI = resolveThirdOpenAIProfile(config, provider);
+        if (provider !== "openai" && provider !== "yunwu" && !selectedThirdOpenAI) {
           sendJson(res, 400, { error: "批量模式仅支持 OpenAI / 第三方 OpenAI。" });
           return;
         }
-        const model = String(body.model || "gpt-image-2").trim();
+        const model = selectedThirdOpenAI?.model || String(body.model || "gpt-image-2").trim();
         const prompts = Array.isArray(body.prompts) ? body.prompts.filter(Boolean) : [];
         const imageUrls = Array.isArray(body.imageUrls)
           ? body.imageUrls.map((v) => String(v || "").trim()).filter(Boolean).slice(0, 10)
@@ -1108,13 +1483,12 @@ async function handleRequest(req, res) {
         if (!imageUrls.length) { sendJson(res, 400, { error: "请上传参考图片。" }); return; }
 
         const isYunwu = provider === "yunwu";
-        const apiKey = isYunwu ? config.yunwuApiKey : config.openaiApiKey;
-        const baseUrl = isYunwu
-          ? (config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "")
-          : "https://api.openai.com/v1";
+        const apiKey = selectedThirdOpenAI?.apiKey || (isYunwu ? config.yunwuApiKey : config.openaiApiKey);
+        const baseUrl = selectedThirdOpenAI?.baseUrl
+          || (isYunwu ? (config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "") : "https://api.openai.com/v1");
 
         if (!apiKey) {
-          sendJson(res, 400, { error: `请先保存 ${isYunwu ? "第三方" : "OpenAI"} API key。` });
+          sendJson(res, 400, { error: `请先保存 ${selectedThirdOpenAI?.name || (isYunwu ? "第三方" : "OpenAI")} API key。` });
           return;
         }
 
@@ -1154,9 +1528,11 @@ async function handleRequest(req, res) {
         const jsonlPath = path.join(os.tmpdir(), `batch-${generateId()}.jsonl`);
         await fs.writeFile(jsonlPath, jsonlLines.join("\n"), "utf8");
 
-        try {
+          try {
           const fileId = await uploadFileCurl(apiKey, jsonlPath, "batch", baseUrl);
           const batch = await createBatchCurl(apiKey, fileId, baseUrl);
+
+          log(`批量任务已创建 batchId=${batch.id} 提示词数=${prompts.length} 状态=${batch.status}`);
 
           const sessionId = String(body.sessionId || "").trim();
           if (sessionId) {
@@ -1186,11 +1562,12 @@ async function handleRequest(req, res) {
       }
 
       if (req.method === "GET" && batchId) {
-        const isYunwu = req.headers["x-provider"] === "yunwu";
-        const apiKey = isYunwu ? config.yunwuApiKey : config.openaiApiKey;
-        const baseUrl = isYunwu
-          ? (config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "")
-          : "https://api.openai.com/v1";
+        const provider = String(req.headers["x-provider"] || "openai");
+        const selectedThirdOpenAI = resolveThirdOpenAIProfile(config, provider);
+        const isYunwu = provider === "yunwu";
+        const apiKey = selectedThirdOpenAI?.apiKey || (isYunwu ? config.yunwuApiKey : config.openaiApiKey);
+        const baseUrl = selectedThirdOpenAI?.baseUrl
+          || (isYunwu ? (config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "") : "https://api.openai.com/v1");
 
         if (!apiKey) {
           sendJson(res, 400, { error: "请先保存 API key。" });
@@ -1202,6 +1579,7 @@ async function handleRequest(req, res) {
           const result = { batch_id: batch.id, status: batch.status };
 
           if (batch.status === "completed" && batch.output_file_id) {
+            log(`批量任务完成 batchId=${batchId} 正在下载输出...`);
             const outputContent = await getFileContentCurl(apiKey, batch.output_file_id, baseUrl);
             const lines = outputContent.split("\n").filter(Boolean);
             const savedOutputs = [];
@@ -1231,27 +1609,27 @@ async function handleRequest(req, res) {
             const thumb = savedOutputs[0] ? await makeThumb(savedOutputs[0], thumbPath) : "";
             const thumbs = thumb ? [thumb] : [];
 
-            const sessions = await readSessions();
-            const session = sessions.find((s) => s.batchId === batchId);
-            if (session) {
+            await mutateSessions((sessions) => {
+              const session = sessions.find((s) => s.batchId === batchId);
+              if (!session) return false;
               session.success = true;
               session.batchStatus = "completed";
               session.outputPaths = savedOutputs;
               session.outputThumb = thumb;
               session.thumbnailPaths = thumbs;
-              await saveSessions(sessions);
-            }
+              return true;
+            });
 
             result.outputs = savedOutputs;
             result.output_count = savedOutputs.length;
           }
 
-          const sessions = await readSessions();
-          const session = sessions.find((s) => s.batchId === batchId);
-          if (session && session.batchStatus !== batch.status) {
+          await mutateSessions((sessions) => {
+            const session = sessions.find((s) => s.batchId === batchId);
+            if (!session || session.batchStatus === batch.status) return false;
             session.batchStatus = batch.status;
-            await saveSessions(sessions);
-          }
+            return true;
+          });
 
           sendJson(res, 200, result);
         } catch (err) {
@@ -1265,6 +1643,7 @@ async function handleRequest(req, res) {
 
     await serveStatic(req, res);
   } catch (error) {
+    log(`服务器错误: ${error.message || error}`);
     sendJson(res, 500, { error: error.message || "服务器内部错误。" });
   }
 }
