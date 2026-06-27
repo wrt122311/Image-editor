@@ -44,6 +44,14 @@
         backdrop-filter: blur(16px);
       }
 
+      .app-header,
+      .history-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
       h1 {
         margin: 0;
         font-size: 24px;
@@ -272,12 +280,106 @@
         text-decoration: none;
         font-weight: 760;
       }
+
+      .history {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        overflow: auto;
+        padding: calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));
+        background: #fff;
+      }
+
+      .history-toolbar {
+        position: sticky;
+        top: calc(-14px - env(safe-area-inset-top));
+        z-index: 1;
+        margin: calc(-14px - env(safe-area-inset-top)) -14px 14px;
+        padding: calc(14px + env(safe-area-inset-top)) 14px 12px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(16px);
+      }
+
+      .history-toolbar h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .history-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .history-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .history-item {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 92px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .history-item img {
+        width: 76px;
+        height: 76px;
+        border-radius: 6px;
+        object-fit: contain;
+        background: var(--soft);
+      }
+
+      .history-copy {
+        min-width: 0;
+      }
+
+      .history-title {
+        overflow: hidden;
+        margin-bottom: 5px;
+        font-weight: 760;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .history-meta,
+      .history-empty {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .history-empty {
+        padding: 60px 12px;
+        text-align: center;
+      }
+
+      .history-delete {
+        color: var(--danger);
+      }
     </style>
   </head>
   <body>
-    <header>
+    <header class="app-header">
       <h1>手机图片编辑</h1>
+      <button type="button" id="openHistory">记录</button>
     </header>
+
+    <section class="history" id="history" hidden>
+      <div class="history-toolbar">
+        <h2>会话记录</h2>
+        <div class="history-actions">
+          <button type="button" class="history-delete" id="clearHistory">清空</button>
+          <button type="button" id="closeHistory">关闭</button>
+        </div>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </section>
 
     <main>
       <section class="images">
@@ -435,8 +537,17 @@
         startedAt: 0,
       };
 
+      const HISTORY_DB = "image-editor-mobile";
+      const HISTORY_STORE = "sessions";
+      const HISTORY_LIMIT = 20;
+
       const els = {
         provider: document.querySelector("#provider"),
+        history: document.querySelector("#history"),
+        historyList: document.querySelector("#historyList"),
+        openHistory: document.querySelector("#openHistory"),
+        closeHistory: document.querySelector("#closeHistory"),
+        clearHistory: document.querySelector("#clearHistory"),
         apiKey: document.querySelector("#apiKey"),
         baseUrl: document.querySelector("#baseUrl"),
         baseUrlLabel: document.querySelector("#baseUrlLabel"),
@@ -470,6 +581,171 @@
 
       function storageKey(provider) {
         return `mobile_image_key_${provider}`;
+      }
+
+      function openHistoryDb() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(HISTORY_DB, 1);
+          request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+              db.createObjectStore(HISTORY_STORE, { keyPath: "id" });
+            }
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      async function historyOperation(mode, operation) {
+        const db = await openHistoryDb();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction(HISTORY_STORE, mode);
+          const store = transaction.objectStore(HISTORY_STORE);
+          let result;
+          try {
+            result = operation(store);
+          } catch (error) {
+            db.close();
+            reject(error);
+            return;
+          }
+          transaction.oncomplete = () => {
+            db.close();
+            resolve(result?.result);
+          };
+          transaction.onerror = () => {
+            db.close();
+            reject(transaction.error);
+          };
+        });
+      }
+
+      async function getHistorySessions() {
+        const sessions = (await historyOperation("readonly", (store) => store.getAll())) || [];
+        return sessions.sort((a, b) => b.createdAt - a.createdAt);
+      }
+
+      async function saveHistorySession(session) {
+        if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+        await historyOperation("readwrite", (store) => store.put(session));
+        const sessions = await getHistorySessions();
+        for (const oldSession of sessions.slice(HISTORY_LIMIT)) {
+          await historyOperation("readwrite", (store) => store.delete(oldSession.id));
+        }
+      }
+
+      function deleteHistorySession(id) {
+        return historyOperation("readwrite", (store) => store.delete(id));
+      }
+
+      function clearHistorySessions() {
+        return historyOperation("readwrite", (store) => store.clear());
+      }
+
+      function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function makeDurableImageRef(url) {
+        if (!url || url.startsWith("data:")) return url;
+        try {
+          const response = await fetch(url);
+          if (!response.ok) return url;
+          return await blobToDataUrl(await response.blob());
+        } catch {
+          return url;
+        }
+      }
+
+      function currentModel() {
+        if (els.provider.value === "xai") return els.grokModel.value;
+        if (els.provider.value === "third-grok") return els.thirdGrokModel.value.trim();
+        return els.openaiModel.value;
+      }
+
+      function restoreHistorySession(session) {
+        if ([...els.provider.options].some((option) => option.value === session.provider)) {
+          els.provider.value = session.provider;
+        }
+        syncProviderUI();
+        if (session.provider === "xai" && [...els.grokModel.options].some((option) => option.value === session.model)) {
+          els.grokModel.value = session.model;
+        } else if (session.provider === "third-grok" && session.model) {
+          els.thirdGrokModel.value = session.model;
+        } else if (session.model && [...els.openaiModel.options].some((option) => option.value === session.model)) {
+          els.openaiModel.value = session.model;
+        }
+        els.prompt.value = session.prompt || "";
+        state.images = Array.isArray(session.inputImages) ? [...session.inputImages] : [];
+        renderInputs();
+        if (session.resultImage) {
+          els.resultImage.src = session.resultImage;
+          els.resultImage.hidden = false;
+          els.resultPlaceholder.hidden = true;
+          els.downloadLink.href = session.resultImage;
+          els.downloadLink.hidden = false;
+        } else {
+          els.resultImage.removeAttribute("src");
+          els.resultImage.hidden = true;
+          els.resultPlaceholder.hidden = false;
+          els.downloadLink.hidden = true;
+        }
+        els.history.hidden = true;
+        setMessage("已恢复会话，可以继续编辑。 ");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      async function renderHistory() {
+        els.historyList.innerHTML = '<div class="history-empty">正在读取记录...</div>';
+        try {
+          const sessions = await getHistorySessions();
+          els.historyList.innerHTML = "";
+          if (!sessions.length) {
+            els.historyList.innerHTML = '<div class="history-empty">还没有会话记录。</div>';
+            return;
+          }
+          sessions.forEach((session) => {
+            const item = document.createElement("article");
+            item.className = "history-item";
+            const image = document.createElement("img");
+            image.src = session.resultImage || session.inputImages?.[0] || "";
+            image.alt = "会话结果";
+            const copy = document.createElement("div");
+            copy.className = "history-copy";
+            const title = document.createElement("div");
+            title.className = "history-title";
+            title.textContent = session.prompt || "未命名会话";
+            const meta = document.createElement("div");
+            meta.className = "history-meta";
+            meta.textContent = `${new Date(session.createdAt).toLocaleString()} · ${session.provider}`;
+            copy.append(title, meta);
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "history-delete";
+            remove.textContent = "删除";
+            remove.addEventListener("click", async () => {
+              await deleteHistorySession(session.id);
+              await renderHistory();
+            });
+            item.addEventListener("click", (event) => {
+              if (event.target !== remove) restoreHistorySession(session);
+            });
+            item.append(image, copy, remove);
+            els.historyList.appendChild(item);
+          });
+        } catch (error) {
+          els.historyList.innerHTML = "";
+          const message = document.createElement("div");
+          message.className = "history-empty";
+          message.textContent = `读取失败：${error.message || "浏览器不支持本地数据库"}`;
+          els.historyList.appendChild(message);
+        }
       }
 
       function setMessage(text, isError = false) {
@@ -678,7 +954,22 @@
         els.resultPlaceholder.hidden = true;
         els.downloadLink.href = url;
         els.downloadLink.hidden = false;
+        return url;
       }
+
+      els.openHistory.addEventListener("click", async () => {
+        els.settings.hidden = true;
+        els.history.hidden = false;
+        await renderHistory();
+      });
+      els.closeHistory.addEventListener("click", () => {
+        els.history.hidden = true;
+      });
+      els.clearHistory.addEventListener("click", async () => {
+        if (!confirm("确定清空这台手机上的全部会话记录吗？")) return;
+        await clearHistorySessions();
+        await renderHistory();
+      });
 
       els.toggleSettings.addEventListener("click", () => {
         els.settings.hidden = !els.settings.hidden;
@@ -742,9 +1033,22 @@
                 : "https://api.openai.com/v1/images/edits";
             data = await callOpenAICompatible(endpoint, key);
           }
-          showResult(data);
+          const resultUrl = showResult(data);
           stopTimer("编辑完成");
-          setMessage("完成。长按结果图可保存，或点击下载结果。");
+          try {
+            await saveHistorySession({
+              id: `${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+              createdAt: Date.now(),
+              prompt: els.prompt.value.trim(),
+              provider,
+              model: currentModel(),
+              inputImages: [...state.images],
+              resultImage: await makeDurableImageRef(resultUrl),
+            });
+            setMessage("完成，已保存到会话记录。长按结果图可保存。");
+          } catch (historyError) {
+            setMessage(`图片已生成，但记录保存失败：${historyError.message || "手机存储空间不足"}`, true);
+          }
         } catch (error) {
           stopTimer("编辑失败");
           setMessage(error.message || "请求失败。可能是浏览器跨域限制或接口拒绝。", true);
