@@ -1113,12 +1113,9 @@
       function optionsWithRandomPrompt(options) {
         try {
           const payload = JSON.parse(options.body);
-          const candidates = PROMPT_PRESETS.filter((preset) => preset.text !== payload.prompt);
-          const pool = candidates.length ? candidates : PROMPT_PRESETS;
-          const preset = pool[Math.floor(Math.random() * pool.length)];
+          const preset = selectRandomPromptPreset(payload.prompt);
           payload.prompt = preset.text;
-          promptInput.value = preset.text;
-          promptPresetInput.value = preset.text;
+          applyPromptPreset(preset);
           return {
             options: { ...options, body: JSON.stringify(payload) },
             preset,
@@ -1128,11 +1125,26 @@
         }
       }
 
+      function selectRandomPromptPreset(excludedText = "") {
+        const candidates = PROMPT_PRESETS.filter((preset) => preset.text !== excludedText);
+        const pool = candidates.length ? candidates : PROMPT_PRESETS;
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      function applyPromptPreset(preset) {
+        promptInput.value = preset.text;
+        promptPresetInput.value = preset.text;
+      }
+
+      function isSafetyBlockText(value) {
+        return /(safety|moderation|content[_ -]?policy|policy[_ -]?violation|unsafe|nsfw|disallowed|审核|安全(?:系统|策略|检查|拒绝)|内容(?:政策|违规)|违规|禁止生成|敏感内容)/i.test(String(value || ""));
+      }
+
       async function responseIndicatesSafetyBlock(response) {
         if (!response || response.ok) return false;
         try {
           const text = await response.clone().text();
-          return /(safety|moderation|content[_ -]?policy|policy[_ -]?violation|unsafe|nsfw|disallowed|审核|安全(?:系统|策略|检查|拒绝)|内容(?:政策|违规)|违规|禁止生成|敏感内容)/i.test(text);
+          return isSafetyBlockText(text);
         } catch {
           return false;
         }
@@ -1690,7 +1702,14 @@
 
           if (!response.ok) {
             rawOutput.hidden = false;
-            setMessage(`${data.error || "编辑失败。"} 用时 ${elapsedForSession(currentSid)}`, true);
+            const errorMessage = typeof data.error === "string" ? data.error : data.error?.message || data.message || "编辑失败。";
+            if (isSafetyBlockText(JSON.stringify(data))) {
+              const suggestedPreset = selectRandomPromptPreset(promptInput.value);
+              applyPromptPreset(suggestedPreset);
+              setMessage(`${errorMessage} 已改用第${suggestedPreset.number}张提示词，请确认后再次点击生成。用时 ${elapsedForSession(currentSid)}`, true);
+            } else {
+              setMessage(`${errorMessage} 用时 ${elapsedForSession(currentSid)}`, true);
+            }
             playNotificationSound();
             return;
           }
