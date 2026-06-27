@@ -282,6 +282,21 @@
         line-height: 1.55;
       }
 
+      .prompt-preset {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 40px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 12px;
+        color: #50565d;
+        background: #fff;
+        outline: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .toolbar {
         grid-column: 1 / -1;
         display: flex;
@@ -746,6 +761,9 @@
       </div>
 
       <div class="prompt-box">
+        <select class="prompt-preset" id="promptPreset">
+          <option value="">选择提示词...</option>
+        </select>
         <textarea id="prompt" placeholder="What do you want to see..."></textarea>
         <button type="button" class="send" id="editImage" title="生成">↑</button>
         <button type="button" class="send stop" id="stopButton" title="停止" hidden>■</button>
@@ -937,6 +955,29 @@
         currentSessionId: null,
       };
 
+      const PROMPT_PRESETS = [
+        { number: 1, text: "全身照，自然站立，正面视角，纯白背景，保持画风不变。" },
+        { number: 2, text: "全身照，三分之四视角站立，一只手轻扶头发，纯白背景，保持画风不变。" },
+        { number: 3, text: "全身照，轻松行走，回头看向镜头，三分之四视角，纯白背景，保持画风不变。" },
+        { number: 4, text: "全身照，单手叉腰站立，身体微侧，正面视角，纯白背景，保持画风不变。" },
+        { number: 5, text: "全身照，坐在椅子上，双手自然放在腿上，正面视角，纯白背景，保持画风不变。" },
+        { number: 6, text: "全身照，坐在地上，双腿自然弯曲，双手轻放身侧，三分之四视角，纯白背景，保持画风不变。" },
+        { number: 7, text: "半身照，正面站立，正面视角，纯白背景，保持画风不变。" },
+        { number: 8, text: "半身照，身体微侧，一只手轻放胸前，三分之四视角，纯白背景，保持画风不变。" },
+        { number: 9, text: "半身照，坐在书桌前阅读书籍，侧面视角，简洁室内背景，柔和光线，保持画风不变。" },
+        { number: 10, text: "半身照，坐在窗前，身体微侧看向镜头，柔和日光，简洁背景，保持画风不变。" },
+        { number: 21, text: "半身照，正面站立，温柔微笑，正面视角，纯色浅灰背景，柔和光线，保持画风不变。" },
+        { number: 22, text: "半身照，三分之四视角，轻柔微笑，简洁背景，柔和室内光，保持画风不变。" },
+        { number: 23, text: "半身照，身体微侧，一只手轻扶头发，害羞微笑，窗边背景，柔和日光，保持画风不变。" },
+        { number: 24, text: "半身照，一只手轻放胸前，安静自然表情，正面视角，纯色背景，柔光，保持画风不变。" },
+        { number: 25, text: "胸像近景，正面视角，温柔微笑，纯色浅色背景，柔和均匀光线，保持画风不变。" },
+        { number: 26, text: "胸像近景，三分之四视角，平静柔和表情，纯色背景，细腻柔光，保持画风不变。" },
+        { number: 27, text: "胸像近景，侧面视角，认真表情，简洁背景，柔和光线，保持画风不变。" },
+        { number: 28, text: "胸像近景，微微低头，轻柔笑意，室内背景虚化，暖色柔光，保持画风不变。" },
+        { number: 29, text: "头像近景，正面视角，开心微笑，背景简洁，柔和均匀光线，保持画风不变。" },
+        { number: 30, text: "头像近景，三分之四视角，平静温柔表情，纯色背景，细腻柔光，保持画风不变。" },
+      ];
+
       const providerInput = document.querySelector("#provider");
       const apiKey = document.querySelector("#apiKey");
       const openaiApiKey = document.querySelector("#openaiApiKey");
@@ -957,6 +998,7 @@
       const clearInputsButton = document.querySelector("#clearInputsButton");
       const dropSurface = document.querySelector("#dropSurface");
       const promptInput = document.querySelector("#prompt");
+      const promptPresetInput = document.querySelector("#promptPreset");
       const modelInput = document.querySelector("#model");
       const customGrokModelInput = document.querySelector("#customGrokModel");
       const openaiModelInput = document.querySelector("#openaiModel");
@@ -991,6 +1033,28 @@
       const closeKeys = document.querySelector("#closeKeys");
       const batchMode = document.querySelector("#batchMode");
       const soundToggle = document.querySelector("#soundToggle");
+
+      PROMPT_PRESETS
+        .slice()
+        .sort((a, b) => a.number - b.number)
+        .forEach((preset) => {
+          const option = document.createElement("option");
+          option.value = preset.text;
+          option.textContent = `第${preset.number}张：${preset.text}`;
+          promptPresetInput.appendChild(option);
+        });
+
+      promptPresetInput.addEventListener("change", () => {
+        if (!promptPresetInput.value) return;
+        promptInput.value = promptPresetInput.value;
+        promptInput.focus();
+      });
+
+      promptInput.addEventListener("input", () => {
+        if (promptPresetInput.value && promptInput.value !== promptPresetInput.value) {
+          promptPresetInput.value = "";
+        }
+      });
 
       function setMessage(text, isError = false) {
         message.textContent = text;
