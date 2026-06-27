@@ -124,6 +124,20 @@ function parseMaybeJson(text) {
   }
 }
 
+function apiErrorMessage(data) {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (typeof data.error === "string") return data.error;
+  if (data.error?.message) return String(data.error.message);
+  if (data.message) return String(data.message);
+  if (data.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+  return "";
+}
+
+function isSafetyRejection(data) {
+  return /(safety|moderation|content[_ -]?policy|policy[_ -]?violation|unsafe|nsfw|disallowed|审核|安全(?:系统|策略|检查|拒绝)|内容(?:政策|违规)|违规|禁止生成|敏感内容)/i.test(apiErrorMessage(data));
+}
+
 function stamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
@@ -559,11 +573,11 @@ async function postToXaiWithPowerShell(apiKey, payload, endpoint = XAI_EDIT_URL)
       const status = statusMatch ? Number(statusMatch[1]) : 0;
       const body = statusMatch ? stdout.slice(0, statusMatch.index) : stdout;
       const data = parseMaybeJson(body);
-      if (code !== 0 || status < 200 || status >= 300) {
-        reject(new Error(data.error?.message || data.error || data.message || stderr || body || "xAI request failed"));
+      if (code !== 0 || !status) {
+        reject(new Error(stderr || apiErrorMessage(data) || body || "xAI request failed"));
         return;
       }
-      resolve({ ok: true, status, data });
+      resolve({ ok: status >= 200 && status < 300, status, data });
     });
   });
 }
@@ -1027,13 +1041,15 @@ async function handleRequest(req, res) {
       }
 
       if (!savedOutputs.length) {
-        const errMsg = "第三方 Grok 响应里没有可保存的图片数据。";
+        const providerError = apiErrorMessage(data);
+        const errMsg = providerError || `${xaiProviderName} 响应里没有可保存的图片数据。`;
+        const responseStatus = isSafetyRejection(data) ? 400 : 502;
         await updateSession(sessionId, {
           success: false,
           error: errMsg,
           inputPaths: savedInputPaths,
         });
-        sendJson(res, 502, {
+        sendJson(res, responseStatus, {
           error: errMsg,
           response: data,
           request: xaiPayload,

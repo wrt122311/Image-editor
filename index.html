@@ -1110,6 +1110,16 @@
         return Math.min(1000 * (2 ** (retryNumber - 1)), 10000);
       }
 
+      async function responseIndicatesSafetyBlock(response) {
+        if (!response || response.ok) return false;
+        try {
+          const text = await response.clone().text();
+          return /(safety|moderation|content[_ -]?policy|policy[_ -]?violation|unsafe|nsfw|disallowed|审核|安全(?:系统|策略|检查|拒绝)|内容(?:政策|违规)|违规|禁止生成|敏感内容)/i.test(text);
+        } catch {
+          return false;
+        }
+      }
+
       async function fetchEditWithRetry(url, options) {
         const maxRetries = autoRetryInput.checked ? Number(retryCountInput.value) : 0;
         const retryOnSuccess = autoRetryInput.checked && retryOnSuccessInput.checked;
@@ -1138,7 +1148,8 @@
             }
           }
 
-          const retryableResponse = response && (response.status === 429 || response.status >= 500);
+          const blockedBySafety = await responseIndicatesSafetyBlock(response);
+          const retryableResponse = response && !blockedBySafety && (response.status === 429 || response.status >= 500);
           const successfulResponse = response?.ok;
           const shouldRepeatSuccess = successfulResponse && retryOnSuccess && retryNumber < maxRetries;
 
