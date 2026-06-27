@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Images</title>
+    <script src="./standalone-adapter.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -270,6 +271,12 @@
         backdrop-filter: blur(18px);
       }
 
+      .prompt-box.drag-over {
+        border-color: var(--accent);
+        background: rgba(235, 248, 245, 0.96);
+        box-shadow: 0 0 0 3px rgba(20, 131, 109, 0.18), var(--shadow);
+      }
+
       textarea {
         width: 100%;
         min-height: 58px;
@@ -464,6 +471,9 @@
         grid-template-columns: 1fr auto;
         gap: 10px;
       }
+      .profile-key-actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+      .active-key-button { color: #176f60; background: #e8f4f1; }
+      .danger-key-button { color: #b42318; background: #fff0ee; }
 
       .message {
         position: fixed;
@@ -486,17 +496,43 @@
         bottom: 20px;
         z-index: 31;
         width: min(520px, calc(100vw - 40px));
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        border-radius: 8px;
+        color: #dfe9e5;
+        background: #20292e;
+        box-shadow: 0 16px 38px rgba(13, 18, 21, 0.28);
+      }
+
+      .raw-panel pre {
         max-height: 42vh;
         overflow: auto;
         margin: 0;
-        padding: 14px;
-        border-radius: 12px;
-        color: #dfe9e5;
-        background: #20292e;
+        padding: 44px 14px 14px;
         font-size: 12px;
         line-height: 1.5;
         white-space: pre-wrap;
       }
+
+      .raw-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        min-height: 30px;
+        padding: 0;
+        border-radius: 6px;
+        color: #eaf0ee;
+        background: #39464c;
+        font-size: 20px;
+      }
+
+      .raw-close:hover { background: #53636a; }
 
       body:not(.sidebar-collapsed) {
         margin-left: 280px;
@@ -702,7 +738,7 @@
       .lightbox {
         position: fixed;
         inset: 0;
-        z-index: 60;
+        z-index: 90;
         display: grid;
         place-items: center;
         padding: 32px;
@@ -718,20 +754,342 @@
       }
       .slot img { cursor: zoom-in; }
       .thumb img { cursor: zoom-in; }
+
+      /* History workspace */
+      body {
+        min-width: 320px;
+        margin-left: 0 !important;
+        background: #f7f8fa;
+      }
+
+      .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 25;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 72px;
+        padding: 12px max(24px, calc((100vw - 1440px) / 2));
+        border-bottom: 1px solid #e2e5e9;
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(16px);
+      }
+
+      .brand-block,
+      .top-actions,
+      .history-controls,
+      .history-search-wrap,
+      .card-actions,
+      .detail-actions {
+        display: flex;
+        align-items: center;
+      }
+
+      .brand-block { gap: 12px; }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 8px;
+        color: #fff;
+        background: #176f60;
+        font-size: 20px;
+        font-weight: 800;
+      }
+      .app-header h1 { font-size: 18px; line-height: 1.2; }
+      .brand-subtitle { margin-top: 2px; color: #848a92; font-size: 12px; }
+      .top-actions { gap: 8px; }
+      .top-actions button { min-height: 36px; border-radius: 7px; padding: 0 12px; }
+
+      .history-page {
+        width: min(1440px, calc(100% - 48px));
+        min-height: calc(100vh - 72px);
+        margin: 0 auto;
+        padding: 28px 0 250px;
+      }
+
+      .history-controls { gap: 10px; margin-bottom: 20px; }
+      .history-controls > button,
+      .history-controls > select,
+      .history-search-wrap {
+        min-height: 46px;
+        border: 1px solid #dfe3e7;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(25, 31, 38, 0.04);
+      }
+      .history-controls > select { min-width: 150px; padding: 0 36px 0 14px; outline: none; }
+      .filter-icon { width: 46px; min-width: 46px; padding: 0; font-size: 24px; }
+      .mobile-config-button { display: none; }
+      .filter-icon.active { color: #9a6d00; background: #fff7da; border-color: #e9cd73; }
+      .history-search-wrap { flex: 1; gap: 10px; padding: 0 14px; color: #828991; }
+      .history-search-wrap input { width: 100%; border: 0; outline: 0; background: transparent; }
+
+      .session-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
+        gap: 18px;
+      }
+      .session-empty { grid-column: 1 / -1; padding: 90px 20px; color: #8b9299; text-align: center; }
+      .session-card {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(170px, 40%) 1fr;
+        min-height: 210px;
+        overflow: hidden;
+        border: 1px solid #dfe3e7;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 3px 12px rgba(31, 38, 46, 0.06);
+        cursor: pointer;
+        transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+      }
+      .session-card:hover { border-color: #aab6b3; box-shadow: 0 9px 24px rgba(31, 38, 46, 0.1); transform: translateY(-1px); }
+      .session-card-media {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 210px;
+        overflow: hidden;
+        background: #eef1f3;
+      }
+      .session-card-media img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: none;
+        padding: 8px;
+        object-fit: contain;
+        object-position: center;
+      }
+      .card-duration {
+        position: absolute;
+        top: 9px;
+        left: 9px;
+        z-index: 2;
+        padding: 3px 7px;
+        border-radius: 5px;
+        color: #fff;
+        background: rgba(31, 36, 42, 0.67);
+        font: 600 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      .card-status { color: #d64545; text-align: center; }
+      .card-status strong { display: block; margin-top: 7px; font-size: 14px; }
+      .card-status-icon { font-size: 31px; line-height: 1; }
+      .card-status.running { color: #376d9f; }
+      .card-status.running .card-status-icon {
+        display: block;
+        width: 30px;
+        height: 30px;
+        margin: 0 auto;
+        border: 2px solid #b7c9d8;
+        border-top-color: #376d9f;
+        border-radius: 50%;
+        font-size: 0;
+        animation: card-loading-spin 0.8s linear infinite;
+      }
+      @keyframes card-loading-spin {
+        to { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .card-status.running .card-status-icon { animation-duration: 1.8s; }
+      }
+      .session-card-body { display: flex; flex-direction: column; min-width: 0; padding: 16px; }
+      .session-card-prompt {
+        display: -webkit-box;
+        overflow: hidden;
+        min-height: 66px;
+        margin: 0 0 14px;
+        color: #30353a;
+        font-size: 15px;
+        line-height: 1.5;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+      }
+      .card-submitted-at { margin: -5px 0 12px; color: #8a9198; font-size: 11px; line-height: 1.4; }
+      .config-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+      .config-chip { max-width: 100%; overflow: hidden; padding: 4px 7px; border-radius: 5px; color: #626970; background: #f0f2f4; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .config-chip.provider { color: #176f60; background: #e8f4f1; }
+      .card-actions { justify-content: flex-end; gap: 3px; margin-top: 12px; }
+      .card-actions button { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 6px; color: #777f86; background: transparent; font-size: 17px; }
+      .card-actions button:hover { color: #176f60; background: #edf5f3; }
+      .card-actions .delete-card:hover { color: #b42318; background: #fff0ee; }
+
+      .composer { bottom: 18px; width: min(1120px, calc(100vw - 40px)); }
+      .prompt-box {
+        grid-template-columns: 1fr auto;
+        gap: 10px 12px;
+        padding: 14px;
+        border-radius: 8px;
+        border-color: #dce1e4;
+        box-shadow: 0 18px 44px rgba(29, 38, 45, 0.16);
+      }
+      .composer-reference-row { grid-column: 1 / -1; }
+      .composer-reference-row .placeholder { max-width: none; padding: 4px 2px; text-align: left; font-size: 12px; }
+      .composer-reference-row .input-strip { display: flex; width: 100%; gap: 8px; overflow-x: auto; }
+      .composer-reference-row .thumb { flex: 0 0 70px; min-height: 54px; height: 54px; border-radius: 6px; }
+      .composer-reference-row .thumb img {
+        max-height: none;
+        padding: 3px;
+        object-fit: contain;
+        object-position: center;
+        background: #f4f6f7;
+      }
+      .composer-reference-row .thumb-index { width: 20px; height: 20px; top: 4px; left: 4px; font-size: 10px; }
+      .composer-reference-row .thumb-remove { width: 20px; height: 20px; min-height: 20px; top: 4px; right: 4px; font-size: 13px; }
+      .prompt-preset { grid-column: 1; min-height: 34px; }
+      #prompt { grid-column: 1; min-height: 50px; padding: 4px 2px; }
+      .prompt-box > .send { grid-column: 2; grid-row: 3; align-self: center; border-radius: 8px; }
+      .toolbar { flex-wrap: wrap; border-top: 1px solid #edf0f2; padding-top: 9px; }
+      .toolbar .pill-select { min-height: 34px; border-radius: 6px; background: #f4f6f7; }
+      .icon-button { width: 36px; height: 36px; min-height: 36px; border-radius: 6px; }
+
+      .session-detail-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        display: grid;
+        place-items: center;
+        padding: 34px;
+        background: rgba(22, 27, 32, 0.56);
+        backdrop-filter: blur(8px);
+      }
+      .session-detail-dialog {
+        display: grid;
+        grid-template-columns: minmax(360px, 1.1fr) minmax(420px, 0.9fr);
+        width: min(1320px, calc(100vw - 68px));
+        height: min(820px, calc(100vh - 68px));
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid #dce1e4;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(18, 24, 30, 0.28);
+      }
+      .session-detail-preview {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: #edf0f2;
+      }
+      .session-detail-preview img {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        padding: 14px;
+        object-fit: contain;
+        object-position: center;
+      }
+      .detail-error { max-width: 620px; padding: 30px; color: #d64545; text-align: center; line-height: 1.6; }
+      .detail-error .card-status-icon { display: block; margin-bottom: 16px; font-size: 48px; }
+      .detail-running { color: #376d9f; text-align: center; font-size: 15px; font-weight: 700; }
+      .detail-running-spinner {
+        display: block;
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 18px;
+        border: 3px solid #b7c9d8;
+        border-top-color: #376d9f;
+        border-radius: 50%;
+        animation: card-loading-spin 0.8s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .detail-running-spinner { animation-duration: 1.8s; }
+      }
+      .session-detail-panel { position: relative; overflow-y: auto; padding: 34px; }
+      .detail-close { position: absolute; top: 16px; right: 16px; width: 38px; height: 38px; min-height: 38px; padding: 0; border-radius: 6px; font-size: 24px; }
+      .detail-section { margin-bottom: 26px; }
+      .detail-heading { display: flex; align-items: center; justify-content: flex-start; gap: 10px; margin: 0 0 10px; color: #858c93; font-size: 13px; font-weight: 700; }
+      .detail-heading > span:last-child { margin-left: auto; }
+      .session-detail-panel > .detail-section:first-of-type { padding-top: 8px; padding-right: 54px; }
+      #copySessionPrompt { min-height: 30px; padding: 0 10px; border-radius: 6px; color: #596168; background: #eef1f3; font-size: 12px; }
+      #copySessionPrompt:hover { color: #176f60; background: #e8f4f1; }
+      .detail-prompt { margin: 0; padding-right: 28px; color: #30353a; font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
+      .detail-reference-list { display: flex; flex-wrap: wrap; gap: 9px; }
+      .detail-reference-list img {
+        width: 82px;
+        height: 82px;
+        border: 1px solid #dfe3e7;
+        border-radius: 7px;
+        padding: 4px;
+        object-fit: contain;
+        object-position: center;
+        background: #f4f6f7;
+        cursor: zoom-in;
+      }
+      .detail-config-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .detail-config-item { min-width: 0; padding: 12px 14px; border-radius: 7px; background: #f4f6f7; }
+      .detail-config-item span { display: block; color: #92989e; font-size: 12px; }
+      .detail-config-item strong { display: block; overflow: hidden; margin-top: 3px; color: #33383d; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+      .detail-meta { color: #858c93; font-size: 13px; }
+      .detail-actions { position: sticky; bottom: -34px; gap: 8px; padding: 16px 0 2px; border-top: 1px solid #e5e8eb; background: #fff; }
+      .detail-actions button,
+      .detail-actions a { min-height: 42px; padding: 0 15px; border-radius: 7px; text-decoration: none; }
+      .reuse-action { color: #176f60; background: #e8f4f1; }
+      .detail-delete { color: #b42318; background: #fff0ee; }
+      .detail-favorite { margin-left: auto; width: 42px; padding: 0 !important; }
+
+      @media (max-width: 820px) {
+        .app-header { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
+        .brand-block { min-width: 0; }
+        .app-header h1 { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+        .top-actions { flex: 0 0 auto; margin-left: auto; }
+        #keysButton {
+          position: fixed;
+          top: calc(10px + env(safe-area-inset-top));
+          right: 14px;
+          z-index: 32;
+          display: block !important;
+          min-width: 52px;
+          min-height: 38px;
+          padding: 0 10px;
+        }
+        .brand-subtitle, .app-header .status { display: none; }
+        .history-page { width: calc(100% - 24px); padding-top: 16px; padding-bottom: calc(290px + env(safe-area-inset-bottom)); }
+        .history-controls { flex-wrap: wrap; }
+        .mobile-config-button { display: block; min-width: 64px; padding: 0 12px; }
+        .history-search-wrap { order: 3; flex-basis: 100%; }
+        .session-grid { grid-template-columns: 1fr; }
+        .session-card { grid-template-columns: 38% 1fr; min-height: 180px; }
+        .session-card-media { min-height: 180px; }
+        .composer { width: calc(100vw - 20px); bottom: calc(10px + env(safe-area-inset-bottom)); }
+        .toolbar { max-height: 84px; overflow-y: auto; }
+        .session-detail-backdrop { padding: 10px; }
+        .session-detail-dialog { display: block; width: 100%; height: calc(100vh - 20px); overflow-y: auto; }
+        .session-detail-preview { height: 42vh; }
+        .session-detail-panel { overflow: visible; padding: 24px 18px; }
+        .detail-actions { bottom: 0; }
+      }
+
+      @media (max-width: 520px) {
+        #rawToggle { display: none; }
+        .session-card { grid-template-columns: 1fr; }
+        .session-card-media { min-height: 220px; }
+        .detail-config-grid { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
-    <nav class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <button type="button" class="sidebar-new" id="newSessionButton">+ 新建会话</button>
-        <button type="button" class="sidebar-toggle" id="sidebarToggle">≡</button>
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark">I</div>
+        <div>
+          <h1>Image Editor</h1>
+          <div class="brand-subtitle">生成记录与图片工作台</div>
+        </div>
       </div>
-      <input class="sidebar-search" id="sessionSearch" name="session_filter_no_autofill" type="search" placeholder="搜索会话..." autocomplete="off" autocapitalize="off" spellcheck="false" readonly />
-      <div class="sidebar-list" id="sessionList"></div>
-    </nav>
-    <button type="button" class="sidebar-expand" id="sidebarExpand" hidden>☰</button>
-    <header class="topbar">
-      <h1>Images</h1>
       <div class="top-actions">
         <span class="status" id="keyStatus">正在读取 API key 状态...</span>
         <button type="button" id="rawToggle">响应</button>
@@ -739,22 +1097,27 @@
       </div>
     </header>
 
-    <main class="stage" id="dropSurface">
-      <section class="gallery">
-        <figure class="slot">
-          <figcaption class="slot-label">原图</figcaption>
-          <div class="placeholder" id="sourcePlaceholder">拖入图片或点击底部附件按钮</div>
-          <div class="input-strip" id="sourceList" hidden></div>
-        </figure>
-        <figure class="slot">
-          <figcaption class="slot-label">编辑结果</figcaption>
-          <div class="timer-display" id="timerDisplay" hidden>正在编辑图片... 已用 0.0 秒</div>
-          <div class="placeholder" id="resultPlaceholder">生成后会显示在这里</div>
-          <img id="resultImage" alt="编辑结果" hidden />
-        </figure>
-        <div class="slot"></div>
-        <div class="slot"></div>
+    <main class="history-page" id="dropSurface">
+      <section class="history-controls" aria-label="记录筛选">
+        <button type="button" class="filter-icon" id="favoriteFilter" title="只看收藏">☆</button>
+        <select id="statusFilter" aria-label="状态筛选">
+          <option value="all">全部状态</option>
+          <option value="success">生成成功</option>
+          <option value="failed">生成失败</option>
+          <option value="running">生成中</option>
+        </select>
+        <button type="button" class="mobile-config-button" id="mobileKeysButton">配置</button>
+        <div class="history-search-wrap">
+          <span aria-hidden="true">⌕</span>
+          <input id="sessionSearch" name="record_filter_query" type="search" placeholder="搜索提示词、API、模型或参数..." autocomplete="one-time-code" aria-autocomplete="none" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" autocapitalize="off" spellcheck="false" readonly />
+        </div>
       </section>
+      <section class="session-grid" id="sessionList" aria-live="polite"></section>
+      <div class="compat-output" hidden>
+        <div class="timer-display" id="timerDisplay" hidden></div>
+        <div id="resultPlaceholder"></div>
+        <img id="resultImage" alt="编辑结果" hidden />
+      </div>
     </main>
 
     <section class="composer">
@@ -781,6 +1144,10 @@
       </div>
 
       <div class="prompt-box">
+        <div class="composer-reference-row">
+          <div class="placeholder" id="sourcePlaceholder">未添加参考图</div>
+          <div class="input-strip" id="sourceList" hidden></div>
+        </div>
         <select class="prompt-preset" id="promptPreset">
           <option value="">选择提示词...</option>
         </select>
@@ -803,7 +1170,7 @@
             <option value="openai">OpenAI</option>
             <optgroup id="thirdOpenAIOptions" label="第三方 GPT"></optgroup>
             <option value="xai">xAI / Grok</option>
-            <option value="third-grok">第三方 Grok</option>
+            <optgroup id="thirdGrokOptions" label="第三方 Grok"></optgroup>
           </select>
           <select class="pill-select" id="openaiModel">
             <option value="gpt-image-2">gpt-image-2</option>
@@ -830,7 +1197,10 @@
     </section>
 
     <div class="message" id="message"></div>
-    <pre class="raw-panel" id="rawOutput" hidden></pre>
+    <div class="raw-panel" id="rawPanel" hidden>
+      <button type="button" class="raw-close" id="closeRawPanel" title="关闭响应">×</button>
+      <pre id="rawOutput"></pre>
+    </div>
 
     <div class="modal-backdrop" id="advancedModal" hidden>
       <section class="modal">
@@ -920,14 +1290,14 @@
           <div class="setting-row">
             <label for="openaiApiKey">OpenAI API key</label>
             <div class="key-grid">
-              <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+              <input id="openaiApiKey" type="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" placeholder="sk-..." />
               <button type="button" id="saveOpenAIKey">保存</button>
             </div>
           </div>
           <div class="setting-row">
             <label for="apiKey">xAI API key</label>
             <div class="key-grid">
-              <input id="apiKey" type="password" autocomplete="off" placeholder="xai-..." />
+              <input id="apiKey" type="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" placeholder="xai-..." />
               <button type="button" id="saveKey">保存</button>
             </div>
           </div>
@@ -945,8 +1315,28 @@
             <input id="openAIProfileName" type="text" autocomplete="off" placeholder="例如：线路 A" />
           </div>
           <div class="setting-row">
-            <label for="openAIProfileKey">第三方 GPT API key</label>
-            <input id="openAIProfileKey" type="password" autocomplete="off" placeholder="sk-...；更新时留空可保留原 key" />
+            <label for="openAIProfileKeySelect">API Key 选择</label>
+            <div class="key-grid">
+              <select id="openAIProfileKeySelect">
+                <option value="">新增 Key</option>
+              </select>
+              <button type="button" class="active-key-button" id="activateOpenAIProfileKey">设为使用</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileKeyNote">Key 备注</label>
+            <input id="openAIProfileKeyNote" type="text" autocomplete="off" placeholder="例如：主账号、备用额度" />
+          </div>
+          <div class="setting-row">
+            <label for="openAIProfileKey">Key 内容</label>
+            <input id="openAIProfileKey" type="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" placeholder="sk-...；修改备注时可留空" />
+          </div>
+          <div class="setting-row">
+            <label>Key 操作</label>
+            <div class="profile-key-actions">
+              <button type="button" id="saveOpenAIProfileKey">添加 Key</button>
+              <button type="button" class="danger-key-button" id="deleteOpenAIProfileKey">删除</button>
+            </div>
           </div>
           <div class="setting-row">
             <label for="openAIProfileBaseUrl">Base URL</label>
@@ -976,18 +1366,49 @@
             <button type="button" id="saveOpenAIProfile">保存第三方 GPT 配置</button>
           </div>
           <div class="setting-row">
-            <label for="thirdGrokApiKey">第三方 Grok API key</label>
+            <label for="thirdGrokProfileSelect">第三方 Grok 配置</label>
             <div class="key-grid">
-              <input id="thirdGrokApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-              <button type="button" id="saveThirdGrokKey">保存</button>
+              <select id="thirdGrokProfileSelect"><option value="">新增配置</option></select>
+              <button type="button" id="deleteThirdGrokProfile">删除</button>
             </div>
           </div>
           <div class="setting-row">
-            <label for="thirdGrokBaseUrl">第三方 Grok Base URL</label>
+            <label for="thirdGrokProfileName">配置名称</label>
+            <input id="thirdGrokProfileName" type="text" autocomplete="off" placeholder="例如：Grok 线路 A" />
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokProfileKeySelect">API Key 选择</label>
             <div class="key-grid">
-              <input id="thirdGrokBaseUrl" type="url" autocomplete="off" placeholder="https://api.example.com/v1" />
-              <button type="button" id="saveThirdGrokUrl">保存</button>
+              <select id="thirdGrokProfileKeySelect"><option value="">新增 Key</option></select>
+              <button type="button" class="active-key-button" id="activateThirdGrokProfileKey">设为使用</button>
             </div>
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokProfileKeyNote">Key 备注</label>
+            <input id="thirdGrokProfileKeyNote" type="text" autocomplete="off" placeholder="例如：主账号、备用额度" />
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokProfileKey">Key 内容</label>
+            <input id="thirdGrokProfileKey" type="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" placeholder="sk-...；修改备注时可留空" />
+          </div>
+          <div class="setting-row">
+            <label>Key 操作</label>
+            <div class="profile-key-actions">
+              <button type="button" id="saveThirdGrokProfileKey">添加 Key</button>
+              <button type="button" class="danger-key-button" id="deleteThirdGrokProfileKey">删除</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokProfileBaseUrl">Base URL</label>
+            <input id="thirdGrokProfileBaseUrl" type="url" autocomplete="off" placeholder="https://api.example.com/v1" />
+          </div>
+          <div class="setting-row">
+            <label for="thirdGrokProfileModel">模型名</label>
+            <input id="thirdGrokProfileModel" type="text" autocomplete="off" placeholder="grok-imagine-image" />
+          </div>
+          <div class="setting-row">
+            <label>配置操作</label>
+            <button type="button" id="saveThirdGrokProfile">保存第三方 Grok 配置</button>
           </div>
           <div class="status" id="openaiKeyStatus">API key 状态尚未读取。</div>
         </div>
@@ -998,8 +1419,41 @@
       <img id="lightboxImage" alt="放大预览" />
     </div>
 
+    <div class="session-detail-backdrop" id="sessionDetailModal" hidden>
+      <section class="session-detail-dialog" role="dialog" aria-modal="true" aria-label="会话详情">
+        <div class="session-detail-preview" id="sessionDetailPreview"></div>
+        <div class="session-detail-panel">
+          <button type="button" class="detail-close" id="closeSessionDetail" title="关闭">×</button>
+          <div class="detail-section">
+            <div class="detail-heading"><span>输入内容</span><button type="button" id="copySessionPrompt" title="复制提示词">复制</button></div>
+            <p class="detail-prompt" id="sessionDetailPrompt"></p>
+          </div>
+          <div class="detail-section" id="detailReferencesSection">
+            <div class="detail-heading"><span>参考图</span><span id="detailReferenceCount"></span></div>
+            <div class="detail-reference-list" id="sessionDetailReferences"></div>
+          </div>
+          <div class="detail-section">
+            <div class="detail-heading"><span>提交配置</span></div>
+            <div class="detail-config-grid" id="sessionDetailConfig"></div>
+          </div>
+          <div class="detail-meta" id="sessionDetailMeta"></div>
+          <div class="detail-actions">
+            <button type="button" class="reuse-action" id="reuseSessionConfig">↩ 复用配置</button>
+            <a id="openSessionOutput" href="#" target="_blank" rel="noreferrer" hidden>打开结果</a>
+            <button type="button" class="detail-delete" id="deleteSessionDetail">删除记录</button>
+            <button type="button" class="detail-favorite" id="favoriteSessionDetail" title="收藏">☆</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <script>
       const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8787" : "";
+      const fileUrl = (value, bustCache = false) => {
+        const path = String(value || "");
+        if (/^(data:|blob:|https?:)/i.test(path)) return path;
+        return `${API_BASE}/api/file?path=${encodeURIComponent(path)}${bustCache ? `&t=${Date.now()}` : ""}`;
+      };
 
       const state = {
         size: "1024x1536",
@@ -1012,6 +1466,8 @@
         currentBatchId: null,
         currentSessionId: null,
       };
+
+      const MAX_CONCURRENT_EDITS = 5;
 
       const PROMPT_PRESETS = [
         { number: 1, text: "全身照，自然站立，正面视角，纯白背景，保持画风不变。" },
@@ -1043,32 +1499,47 @@
 
       const providerInput = document.querySelector("#provider");
       const thirdOpenAIOptions = document.querySelector("#thirdOpenAIOptions");
+      const thirdGrokOptions = document.querySelector("#thirdGrokOptions");
       const apiKey = document.querySelector("#apiKey");
       const openaiApiKey = document.querySelector("#openaiApiKey");
       const openAIProfileSelect = document.querySelector("#openAIProfileSelect");
       const openAIProfileName = document.querySelector("#openAIProfileName");
+      const openAIProfileKeySelect = document.querySelector("#openAIProfileKeySelect");
+      const openAIProfileKeyNote = document.querySelector("#openAIProfileKeyNote");
       const openAIProfileKey = document.querySelector("#openAIProfileKey");
+      const saveOpenAIProfileKey = document.querySelector("#saveOpenAIProfileKey");
+      const activateOpenAIProfileKey = document.querySelector("#activateOpenAIProfileKey");
+      const deleteOpenAIProfileKey = document.querySelector("#deleteOpenAIProfileKey");
       const openAIProfileBaseUrl = document.querySelector("#openAIProfileBaseUrl");
       const openAIProfileModel = document.querySelector("#openAIProfileModel");
       const openAIProfileMode = document.querySelector("#openAIProfileMode");
       const openAIProfileResolution = document.querySelector("#openAIProfileResolution");
       const openAIProfileResolutionRow = document.querySelector("#openAIProfileResolutionRow");
-      const thirdGrokApiKey = document.querySelector("#thirdGrokApiKey");
-      const thirdGrokBaseUrl = document.querySelector("#thirdGrokBaseUrl");
+      const thirdGrokProfileSelect = document.querySelector("#thirdGrokProfileSelect");
+      const thirdGrokProfileName = document.querySelector("#thirdGrokProfileName");
+      const thirdGrokProfileKeySelect = document.querySelector("#thirdGrokProfileKeySelect");
+      const thirdGrokProfileKeyNote = document.querySelector("#thirdGrokProfileKeyNote");
+      const thirdGrokProfileKey = document.querySelector("#thirdGrokProfileKey");
+      const thirdGrokProfileBaseUrl = document.querySelector("#thirdGrokProfileBaseUrl");
+      const thirdGrokProfileModel = document.querySelector("#thirdGrokProfileModel");
+      const saveThirdGrokProfile = document.querySelector("#saveThirdGrokProfile");
+      const deleteThirdGrokProfile = document.querySelector("#deleteThirdGrokProfile");
+      const saveThirdGrokProfileKey = document.querySelector("#saveThirdGrokProfileKey");
+      const activateThirdGrokProfileKey = document.querySelector("#activateThirdGrokProfileKey");
+      const deleteThirdGrokProfileKey = document.querySelector("#deleteThirdGrokProfileKey");
       const keyStatus = document.querySelector("#keyStatus");
       const openaiKeyStatus = document.querySelector("#openaiKeyStatus");
       const saveKey = document.querySelector("#saveKey");
       const saveOpenAIKey = document.querySelector("#saveOpenAIKey");
       const saveOpenAIProfile = document.querySelector("#saveOpenAIProfile");
       const deleteOpenAIProfile = document.querySelector("#deleteOpenAIProfile");
-      const saveThirdGrokKey = document.querySelector("#saveThirdGrokKey");
-      const saveThirdGrokUrl = document.querySelector("#saveThirdGrokUrl");
       const imageFile = document.querySelector("#imageFile");
       const attachButton = document.querySelector("#attachButton");
       const clearInputsButton = document.querySelector("#clearInputsButton");
       const lightbox = document.querySelector("#lightbox");
       const lightboxImage = document.querySelector("#lightboxImage");
       const dropSurface = document.querySelector("#dropSurface");
+      const promptBox = document.querySelector(".prompt-box");
       const promptInput = document.querySelector("#prompt");
       const promptPresetInput = document.querySelector("#promptPreset");
       const modelInput = document.querySelector("#model");
@@ -1094,6 +1565,8 @@
       const resultPlaceholder = document.querySelector("#resultPlaceholder");
       const timerDisplay = document.querySelector("#timerDisplay");
       const rawOutput = document.querySelector("#rawOutput");
+      const rawPanel = document.querySelector("#rawPanel");
+      const closeRawPanel = document.querySelector("#closeRawPanel");
       const rawToggle = document.querySelector("#rawToggle");
       const downloadLink = document.querySelector("#downloadLink");
       const settingsButton = document.querySelector("#settingsButton");
@@ -1102,6 +1575,7 @@
       const advancedModal = document.querySelector("#advancedModal");
       const closeAdvanced = document.querySelector("#closeAdvanced");
       const keysButton = document.querySelector("#keysButton");
+      const mobileKeysButton = document.querySelector("#mobileKeysButton");
       const keysModal = document.querySelector("#keysModal");
       const closeKeys = document.querySelector("#closeKeys");
       const batchMode = document.querySelector("#batchMode");
@@ -1396,9 +1870,7 @@
       }
 
       function syncEditButtonState() {
-        const editing = state.currentSessionId && (state.currentSessionId in state.activeEdits);
-        editImage.hidden = editing;
-        stopButton.hidden = !editing;
+        stopButton.hidden = true;
       }
 
       function showImage(img, placeholder, src) {
@@ -1460,6 +1932,7 @@
       }
 
       let configuredThirdOpenAIProfiles = [];
+      let configuredThirdGrokProfiles = [];
 
       function isThirdOpenAIProvider(value = providerInput.value) {
         return value.startsWith("openai-profile:");
@@ -1469,6 +1942,16 @@
         if (!isThirdOpenAIProvider()) return null;
         const id = providerInput.value.slice("openai-profile:".length);
         return configuredThirdOpenAIProfiles.find((profile) => profile.id === id) || null;
+      }
+
+      function isThirdGrokProvider(value = providerInput.value) {
+        return value === "third-grok" || value.startsWith("grok-profile:");
+      }
+
+      function selectedThirdGrokProfile() {
+        if (!providerInput.value.startsWith("grok-profile:")) return null;
+        const id = providerInput.value.slice("grok-profile:".length);
+        return configuredThirdGrokProfiles.find((profile) => profile.id === id) || null;
       }
 
       function syncOpenAIModelForProvider() {
@@ -1486,12 +1969,14 @@
 
       function updateProviderFields() {
         const isOpenAI = providerInput.value === "openai" || providerInput.value === "yunwu" || isThirdOpenAIProvider();
-        const isThirdGrok = providerInput.value === "third-grok";
+        const isThirdGrok = isThirdGrokProvider();
         const supportsBatch = isOpenAI && selectedThirdOpenAIProfile()?.mode !== "tasks";
         syncOpenAIModelForProvider();
         openaiModelInput.hidden = !isOpenAI;
         modelInput.hidden = isOpenAI || isThirdGrok;
         customGrokModelInput.hidden = !isThirdGrok;
+        customGrokModelInput.disabled = Boolean(selectedThirdGrokProfile());
+        if (isThirdGrok && selectedThirdGrokProfile()?.model) customGrokModelInput.value = selectedThirdGrokProfile().model;
         batchMode.hidden = !supportsBatch;
         if (!supportsBatch && batchMode.value === "batch") {
           batchMode.value = "single";
@@ -1507,13 +1992,13 @@
       function getInputLimit() {
         if (selectedThirdOpenAIProfile()?.mode === "tasks") return 16;
         if (providerInput.value === "xai") return 1;
-        if (providerInput.value === "third-grok") return 3;
+        if (isThirdGrokProvider()) return 3;
         return 10;
       }
 
       function getGrokModelName() {
-        return providerInput.value === "third-grok"
-          ? (customGrokModelInput.value.trim() || "grok-imagine-image")
+        return isThirdGrokProvider()
+          ? (selectedThirdGrokProfile()?.model || customGrokModelInput.value.trim() || "grok-imagine-image")
           : modelInput.value;
       }
 
@@ -1530,8 +2015,8 @@
       }
 
       function renderSettingsPopover() {
-        const isGrok = providerInput.value === "xai" || providerInput.value === "third-grok";
-        const isThirdGrok = providerInput.value === "third-grok";
+        const isGrok = providerInput.value === "xai" || isThirdGrokProvider();
+        const isThirdGrok = isThirdGrokProvider();
         if (isGrok) {
           settingsPopover.innerHTML = `
             ${isThirdGrok ? "" : `
@@ -1643,9 +2128,32 @@
         setMessage(`已加入 ${accepted.length} 张图片，共 ${state.inputImages.length} 张。${dropped > 0 ? `已忽略 ${dropped} 张超限图片。` : ""}`);
       }
 
-      function fillOpenAIProfileForm(profile) {
-        openAIProfileName.value = profile?.name || "";
+      function fillOpenAIProfileKeyForm(profile, preferredKeyId = null) {
+        const keys = Array.isArray(profile?.keys) ? profile.keys : [];
+        openAIProfileKeySelect.innerHTML = '<option value="">新增 Key</option>';
+        keys.forEach((key) => {
+          const option = document.createElement("option");
+          option.value = key.id;
+          option.textContent = `${key.active ? "当前 · " : ""}${key.note} (${key.masked})`;
+          openAIProfileKeySelect.appendChild(option);
+        });
+        const selectedId = preferredKeyId !== null && (preferredKeyId === "" || keys.some((key) => key.id === preferredKeyId))
+          ? preferredKeyId
+          : profile?.activeKeyId || keys[0]?.id || "";
+        openAIProfileKeySelect.value = selectedId;
+        const selectedKey = keys.find((key) => key.id === selectedId) || null;
+        openAIProfileKeyNote.value = selectedKey?.note || "";
         openAIProfileKey.value = "";
+        openAIProfileKeySelect.disabled = !profile;
+        saveOpenAIProfileKey.disabled = !profile;
+        saveOpenAIProfileKey.textContent = selectedKey ? "保存 Key" : "添加 Key";
+        activateOpenAIProfileKey.disabled = !selectedKey || selectedKey.active;
+        activateOpenAIProfileKey.textContent = selectedKey?.active ? "使用中" : "设为使用";
+        deleteOpenAIProfileKey.disabled = !selectedKey || keys.length <= 1;
+      }
+
+      function fillOpenAIProfileForm(profile, preferredKeyId = null) {
+        openAIProfileName.value = profile?.name || "";
         openAIProfileBaseUrl.value = profile?.baseUrl || "https://api.zhongzhuan.chat/v1";
         openAIProfileModel.value = profile?.model || "gpt-image-2";
         openAIProfileMode.value = profile?.mode || "edits";
@@ -1653,6 +2161,7 @@
         openAIProfileResolutionRow.hidden = openAIProfileMode.value !== "tasks";
         deleteOpenAIProfile.disabled = !profile;
         saveOpenAIProfile.textContent = profile ? "保存修改" : "添加配置";
+        fillOpenAIProfileKeyForm(profile, preferredKeyId);
       }
 
       function renderThirdOpenAIProfiles(profiles) {
@@ -1665,12 +2174,12 @@
         configuredThirdOpenAIProfiles.forEach((profile) => {
           const providerOption = document.createElement("option");
           providerOption.value = `openai-profile:${profile.id}`;
-          providerOption.textContent = `${profile.name}${profile.mode === "tasks" ? " · 异步任务" : ""}`;
+          providerOption.textContent = `${profile.name}${profile.keyNote ? ` · ${profile.keyNote}` : ""}${profile.mode === "tasks" ? " · 异步任务" : ""}`;
           thirdOpenAIOptions.appendChild(providerOption);
 
           const editorOption = document.createElement("option");
           editorOption.value = profile.id;
-          editorOption.textContent = `${profile.name}${profile.mode === "tasks" ? " · 异步任务" : ""}${profile.saved ? ` (${profile.masked})` : ""}`;
+          editorOption.textContent = `${profile.name}${profile.mode === "tasks" ? " · 异步任务" : ""} · ${profile.keys?.length || 0} Keys${profile.keyNote ? ` · ${profile.keyNote}` : ""}`;
           openAIProfileSelect.appendChild(editorOption);
         });
 
@@ -1694,6 +2203,70 @@
         openAIProfileSelect.value = editorId;
         fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === editorId));
         updateProviderFields();
+        if (allSessions.length) renderCurrentSessionList();
+      }
+
+      function fillThirdGrokKeyForm(profile, preferredKeyId = null) {
+        const keys = Array.isArray(profile?.keys) ? profile.keys : [];
+        thirdGrokProfileKeySelect.innerHTML = '<option value="">新增 Key</option>';
+        keys.forEach((key) => {
+          const option = document.createElement("option");
+          option.value = key.id;
+          option.textContent = `${key.active ? "当前 · " : ""}${key.note} (${key.masked})`;
+          thirdGrokProfileKeySelect.appendChild(option);
+        });
+        const selectedId = preferredKeyId !== null && (preferredKeyId === "" || keys.some((key) => key.id === preferredKeyId))
+          ? preferredKeyId : profile?.activeKeyId || keys[0]?.id || "";
+        thirdGrokProfileKeySelect.value = selectedId;
+        const selectedKey = keys.find((key) => key.id === selectedId) || null;
+        thirdGrokProfileKeyNote.value = selectedKey?.note || "";
+        thirdGrokProfileKey.value = "";
+        thirdGrokProfileKeySelect.disabled = !profile;
+        saveThirdGrokProfileKey.disabled = !profile;
+        saveThirdGrokProfileKey.textContent = selectedKey ? "保存 Key" : "添加 Key";
+        activateThirdGrokProfileKey.disabled = !selectedKey || selectedKey.active;
+        activateThirdGrokProfileKey.textContent = selectedKey?.active ? "使用中" : "设为使用";
+        deleteThirdGrokProfileKey.disabled = !selectedKey || keys.length <= 1;
+      }
+
+      function fillThirdGrokProfileForm(profile, preferredKeyId = null) {
+        thirdGrokProfileName.value = profile?.name || "";
+        thirdGrokProfileBaseUrl.value = profile?.baseUrl || "https://api.x.ai/v1";
+        thirdGrokProfileModel.value = profile?.model || "grok-imagine-image";
+        deleteThirdGrokProfile.disabled = !profile;
+        saveThirdGrokProfile.textContent = profile ? "保存修改" : "添加配置";
+        fillThirdGrokKeyForm(profile, preferredKeyId);
+      }
+
+      function renderThirdGrokProfiles(profiles) {
+        const previousEditorId = thirdGrokProfileSelect.value;
+        configuredThirdGrokProfiles = Array.isArray(profiles) ? profiles : [];
+        thirdGrokOptions.innerHTML = "";
+        thirdGrokProfileSelect.innerHTML = '<option value="">新增配置</option>';
+        configuredThirdGrokProfiles.forEach((profile) => {
+          const providerOption = document.createElement("option");
+          providerOption.value = `grok-profile:${profile.id}`;
+          providerOption.textContent = `${profile.name}${profile.keyNote ? ` · ${profile.keyNote}` : ""}`;
+          thirdGrokOptions.appendChild(providerOption);
+          const editorOption = document.createElement("option");
+          editorOption.value = profile.id;
+          editorOption.textContent = `${profile.name} · ${profile.keys?.length || 0} Keys${profile.keyNote ? ` · ${profile.keyNote}` : ""}`;
+          thirdGrokProfileSelect.appendChild(editorOption);
+        });
+        const storedProvider = localStorage.getItem("desktop_provider") || "";
+        const values = [...providerInput.options].map((option) => option.value);
+        if (storedProvider === "third-grok" && configuredThirdGrokProfiles[0]) {
+          providerInput.value = `grok-profile:${configuredThirdGrokProfiles[0].id}`;
+          localStorage.setItem("desktop_provider", providerInput.value);
+        } else if (values.includes(storedProvider)) {
+          providerInput.value = storedProvider;
+        }
+        const activeId = selectedThirdGrokProfile()?.id || "";
+        const editorId = configuredThirdGrokProfiles.some((profile) => profile.id === previousEditorId)
+          ? previousEditorId : activeId || configuredThirdGrokProfiles[0]?.id || "";
+        thirdGrokProfileSelect.value = editorId;
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((profile) => profile.id === editorId));
+        updateProviderFields();
       }
 
       async function refreshKeyStatus() {
@@ -1701,21 +2274,19 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "读取 API 配置失败。");
         renderThirdOpenAIProfiles(data.thirdOpenAIProfiles || []);
+        renderThirdGrokProfiles(data.thirdGrokProfiles || []);
         const xaiText = data.saved ? `xAI ${data.masked}` : "xAI 未保存";
         const openaiText = data.openaiSaved ? `OpenAI ${data.openaiMasked}` : "OpenAI 未保存";
         const thirdOpenAIText = configuredThirdOpenAIProfiles.length
           ? `第三方 GPT ${configuredThirdOpenAIProfiles.length} 条`
           : "第三方 GPT 未配置";
-        const thirdGrokText = data.thirdGrokSaved ? `第三方 Grok ${data.thirdGrokMasked}` : "第三方 Grok 未保存";
+        const thirdGrokText = configuredThirdGrokProfiles.length ? `第三方 Grok ${configuredThirdGrokProfiles.length} 条` : "第三方 Grok 未配置";
         keyStatus.textContent = `${openaiText} / ${thirdOpenAIText} / ${xaiText} / ${thirdGrokText}`;
         openaiKeyStatus.textContent = data.openaiSaved
           ? `OpenAI key 已保存：${data.openaiMasked}`
           : "OpenAI key 尚未保存";
         openaiKeyStatus.textContent += `；第三方 GPT 配置 ${configuredThirdOpenAIProfiles.length} 条`;
-        openaiKeyStatus.textContent += data.thirdGrokSaved
-          ? `；第三方 Grok key 已保存：${data.thirdGrokMasked}`
-          : "；第三方 Grok key 尚未保存";
-        thirdGrokBaseUrl.value = data.thirdGrokBaseUrl || "https://api.x.ai/v1";
+        openaiKeyStatus.textContent += `；第三方 Grok 配置 ${configuredThirdGrokProfiles.length} 条`;
       }
 
       async function saveThirdOpenAIProfile() {
@@ -1727,7 +2298,8 @@
           body: JSON.stringify({
             id: selectedId,
             name: openAIProfileName.value,
-            apiKey: openAIProfileKey.value,
+            apiKey: selectedId ? "" : openAIProfileKey.value,
+            keyNote: openAIProfileKeyNote.value,
             baseUrl: openAIProfileBaseUrl.value,
             model: openAIProfileModel.value,
             mode: openAIProfileMode.value,
@@ -1750,6 +2322,76 @@
         setMessage("第三方 GPT 配置已保存。");
       }
 
+      async function saveThirdOpenAIProfileKey() {
+        const profileId = openAIProfileSelect.value;
+        if (!profileId) {
+          setMessage("请先添加并保存第三方 GPT 配置。", true);
+          return;
+        }
+        const keyId = openAIProfileKeySelect.value;
+        const note = openAIProfileKeyNote.value.trim();
+        const apiKeyValue = openAIProfileKey.value.trim();
+        if (!note || (!keyId && !apiKeyValue)) {
+          setMessage("请填写 Key 备注和 Key 内容。", true);
+          return;
+        }
+        setMessage(keyId ? "正在保存 Key..." : "正在添加 Key...");
+        const response = await fetch(`${API_BASE}/api/openai-profiles/${encodeURIComponent(profileId)}/keys${keyId ? `/${encodeURIComponent(keyId)}` : ""}`, {
+          method: keyId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note, apiKey: apiKeyValue }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "Key 保存失败。", true);
+          return;
+        }
+        await refreshKeyStatus();
+        openAIProfileSelect.value = profileId;
+        fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === profileId), data.keyId || keyId);
+        setMessage(keyId ? "Key 已保存。" : "Key 已添加。");
+      }
+
+      async function activateThirdOpenAIProfileKey() {
+        const profileId = openAIProfileSelect.value;
+        const keyId = openAIProfileKeySelect.value;
+        if (!profileId || !keyId) return;
+        const response = await fetch(`${API_BASE}/api/openai-profiles/${encodeURIComponent(profileId)}/keys/${encodeURIComponent(keyId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: true }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "切换 Key 失败。", true);
+          return;
+        }
+        await refreshKeyStatus();
+        openAIProfileSelect.value = profileId;
+        fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === profileId), keyId);
+        setMessage(`当前使用 Key：${openAIProfileKeyNote.value}`);
+      }
+
+      async function removeThirdOpenAIProfileKey() {
+        const profileId = openAIProfileSelect.value;
+        const keyId = openAIProfileKeySelect.value;
+        if (!profileId || !keyId) return;
+        const key = configuredThirdOpenAIProfiles
+          .find((profile) => profile.id === profileId)?.keys
+          ?.find((item) => item.id === keyId);
+        if (!confirm(`确定删除 Key“${key?.note || "未命名"}”吗？`)) return;
+        const response = await fetch(`${API_BASE}/api/openai-profiles/${encodeURIComponent(profileId)}/keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || "删除 Key 失败。", true);
+          return;
+        }
+        await refreshKeyStatus();
+        openAIProfileSelect.value = profileId;
+        fillOpenAIProfileForm(configuredThirdOpenAIProfiles.find((profile) => profile.id === profileId));
+        setMessage("Key 已删除。");
+      }
+
       async function removeThirdOpenAIProfile() {
         const id = openAIProfileSelect.value;
         if (!id) return;
@@ -1766,12 +2408,93 @@
         setMessage("第三方 GPT 配置已删除。");
       }
 
-      async function saveProviderKey(provider, value, baseUrl = "") {
+      async function saveThirdGrokProfileConfig() {
+        const id = thirdGrokProfileSelect.value;
+        const response = await fetch(`${API_BASE}/api/grok-profiles`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            name: thirdGrokProfileName.value,
+            apiKey: id ? "" : thirdGrokProfileKey.value,
+            keyNote: thirdGrokProfileKeyNote.value,
+            baseUrl: thirdGrokProfileBaseUrl.value,
+            model: thirdGrokProfileModel.value,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) { setMessage(data.error || "第三方 Grok 配置保存失败。", true); return; }
+        await refreshKeyStatus();
+        thirdGrokProfileSelect.value = data.profile.id;
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((profile) => profile.id === data.profile.id));
+        providerInput.value = `grok-profile:${data.profile.id}`;
+        localStorage.setItem("desktop_provider", providerInput.value);
+        updateProviderFields();
+        setMessage("第三方 Grok 配置已保存。");
+      }
+
+      async function saveThirdGrokKeyConfig() {
+        const profileId = thirdGrokProfileSelect.value;
+        if (!profileId) { setMessage("请先添加并保存第三方 Grok 配置。", true); return; }
+        const keyId = thirdGrokProfileKeySelect.value;
+        const note = thirdGrokProfileKeyNote.value.trim();
+        const apiKey = thirdGrokProfileKey.value.trim();
+        if (!note || (!keyId && !apiKey)) { setMessage("请填写 Key 备注和 Key 内容。", true); return; }
+        const response = await fetch(`${API_BASE}/api/grok-profiles/${encodeURIComponent(profileId)}/keys${keyId ? `/${encodeURIComponent(keyId)}` : ""}`, {
+          method: keyId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note, apiKey }),
+        });
+        const data = await response.json();
+        if (!response.ok) { setMessage(data.error || "Key 保存失败。", true); return; }
+        await refreshKeyStatus(); thirdGrokProfileSelect.value = profileId;
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((profile) => profile.id === profileId), data.keyId || keyId);
+        setMessage(keyId ? "Key 已保存。" : "Key 已添加。");
+      }
+
+      async function activateThirdGrokKeyConfig() {
+        const profileId = thirdGrokProfileSelect.value; const keyId = thirdGrokProfileKeySelect.value;
+        if (!profileId || !keyId) return;
+        const response = await fetch(`${API_BASE}/api/grok-profiles/${encodeURIComponent(profileId)}/keys/${encodeURIComponent(keyId)}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: true }),
+        });
+        const data = await response.json();
+        if (!response.ok) { setMessage(data.error || "切换 Key 失败。", true); return; }
+        await refreshKeyStatus(); thirdGrokProfileSelect.value = profileId;
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((profile) => profile.id === profileId), keyId);
+        setMessage(`当前使用 Key：${thirdGrokProfileKeyNote.value}`);
+      }
+
+      async function removeThirdGrokKeyConfig() {
+        const profileId = thirdGrokProfileSelect.value; const keyId = thirdGrokProfileKeySelect.value;
+        if (!profileId || !keyId) return;
+        const key = configuredThirdGrokProfiles.find((profile) => profile.id === profileId)?.keys?.find((item) => item.id === keyId);
+        if (!confirm(`确定删除 Key“${key?.note || "未命名"}”吗？`)) return;
+        const response = await fetch(`${API_BASE}/api/grok-profiles/${encodeURIComponent(profileId)}/keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) { setMessage(data.error || "删除 Key 失败。", true); return; }
+        await refreshKeyStatus(); thirdGrokProfileSelect.value = profileId;
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((profile) => profile.id === profileId));
+        setMessage("Key 已删除。");
+      }
+
+      async function removeThirdGrokProfileConfig() {
+        const id = thirdGrokProfileSelect.value;
+        if (!id) return;
+        const profile = configuredThirdGrokProfiles.find((item) => item.id === id);
+        if (!confirm(`确定删除“${profile?.name || "该配置"}”吗？`)) return;
+        const response = await fetch(`${API_BASE}/api/grok-profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) { setMessage(data.error || "删除失败。", true); return; }
+        localStorage.removeItem("desktop_provider"); await refreshKeyStatus();
+        setMessage("第三方 Grok 配置已删除。");
+      }
+
+      async function saveProviderKey(provider, value, baseUrl = "", model = "") {
         setMessage("正在保存 API key...");
+        const body = { provider, apiKey: value, baseUrl };
+        if (model) body.model = model;
         const response = await fetch(`${API_BASE}/api/key`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, apiKey: value, baseUrl }),
+          body: JSON.stringify(body),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -1780,7 +2503,6 @@
         }
         apiKey.value = "";
         openaiApiKey.value = "";
-        thirdGrokApiKey.value = "";
         await refreshKeyStatus();
         setMessage("API key 已保存。");
       }
@@ -1802,15 +2524,32 @@
         const profile = configuredThirdOpenAIProfiles.find((item) => item.id === openAIProfileSelect.value);
         fillOpenAIProfileForm(profile);
       });
+      openAIProfileKeySelect.addEventListener("change", () => {
+        const profile = configuredThirdOpenAIProfiles.find((item) => item.id === openAIProfileSelect.value);
+        fillOpenAIProfileKeyForm(profile, openAIProfileKeySelect.value);
+      });
       openAIProfileMode.addEventListener("change", () => {
         openAIProfileResolutionRow.hidden = openAIProfileMode.value !== "tasks";
       });
+      thirdGrokProfileSelect.addEventListener("change", () => {
+        fillThirdGrokProfileForm(configuredThirdGrokProfiles.find((item) => item.id === thirdGrokProfileSelect.value));
+      });
+      thirdGrokProfileKeySelect.addEventListener("change", () => {
+        const profile = configuredThirdGrokProfiles.find((item) => item.id === thirdGrokProfileSelect.value);
+        fillThirdGrokKeyForm(profile, thirdGrokProfileKeySelect.value);
+      });
       saveOpenAIProfile.addEventListener("click", saveThirdOpenAIProfile);
       deleteOpenAIProfile.addEventListener("click", removeThirdOpenAIProfile);
+      saveOpenAIProfileKey.addEventListener("click", saveThirdOpenAIProfileKey);
+      activateOpenAIProfileKey.addEventListener("click", activateThirdOpenAIProfileKey);
+      deleteOpenAIProfileKey.addEventListener("click", removeThirdOpenAIProfileKey);
+      saveThirdGrokProfile.addEventListener("click", saveThirdGrokProfileConfig);
+      deleteThirdGrokProfile.addEventListener("click", removeThirdGrokProfileConfig);
+      saveThirdGrokProfileKey.addEventListener("click", saveThirdGrokKeyConfig);
+      activateThirdGrokProfileKey.addEventListener("click", activateThirdGrokKeyConfig);
+      deleteThirdGrokProfileKey.addEventListener("click", removeThirdGrokKeyConfig);
       saveKey.addEventListener("click", () => saveProviderKey("xai", apiKey.value));
       saveOpenAIKey.addEventListener("click", () => saveProviderKey("openai", openaiApiKey.value));
-      saveThirdGrokKey.addEventListener("click", () => saveProviderKey("third-grok", thirdGrokApiKey.value, thirdGrokBaseUrl.value));
-      saveThirdGrokUrl.addEventListener("click", () => saveProviderKey("third-grok-url", "", thirdGrokBaseUrl.value));
 
       settingsButton.addEventListener("click", () => {
         renderSettingsPopover();
@@ -1832,6 +2571,7 @@
         }
         keysModal.hidden = false;
       });
+      mobileKeysButton.addEventListener("click", () => keysButton.click());
       closeKeys.addEventListener("click", () => {
         keysModal.hidden = true;
       });
@@ -1853,17 +2593,41 @@
       });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && !lightbox.hidden) lightbox.hidden = true;
+        if (e.key === "Escape" && !rawPanel.hidden) rawPanel.hidden = true;
       });
 
       rawToggle.addEventListener("click", () => {
-        rawOutput.hidden = !rawOutput.hidden;
+        rawPanel.hidden = !rawPanel.hidden;
       });
+      closeRawPanel.addEventListener("click", () => { rawPanel.hidden = true; });
 
       ["dragenter", "dragover"].forEach((eventName) => {
         dropSurface.addEventListener(eventName, (event) => event.preventDefault());
       });
       dropSurface.addEventListener("drop", (event) => {
         event.preventDefault();
+        loadImageFiles(event.dataTransfer.files);
+      });
+
+      let promptDragCounter = 0;
+      ["dragenter", "dragover"].forEach((eventName) => {
+        promptBox.addEventListener(eventName, (event) => { event.preventDefault(); });
+      });
+      promptBox.addEventListener("dragenter", () => {
+        promptDragCounter += 1;
+        promptBox.classList.add("drag-over");
+      });
+      promptBox.addEventListener("dragleave", () => {
+        promptDragCounter -= 1;
+        if (promptDragCounter <= 0) {
+          promptDragCounter = 0;
+          promptBox.classList.remove("drag-over");
+        }
+      });
+      promptBox.addEventListener("drop", (event) => {
+        event.preventDefault();
+        promptDragCounter = 0;
+        promptBox.classList.remove("drag-over");
         loadImageFiles(event.dataTransfer.files);
       });
 
@@ -1886,27 +2650,21 @@
           return;
         }
 
-        const currentSid = state.currentSessionId;
-        editImage.hidden = true;
-        stopButton.hidden = false;
+        const activeCount = Object.keys(state.activeEdits).length;
+        if (activeCount >= MAX_CONCURRENT_EDITS) {
+          setMessage(`已有 ${activeCount} 个任务正在处理，请等待完成后再提交。`, true);
+          return;
+        }
+
+        const currentSid = await createSubmissionSession(promptInput.value.trim());
+        if (!currentSid) return;
+        state.currentSessionId = currentSid;
         clearResult();
-        rawOutput.hidden = true;
+        rawPanel.hidden = true;
         startSessionEdit(currentSid);
 
-        if (currentSid) {
-          const promptText = promptInput.value.trim();
-          fetch(`${API_BASE}/api/sessions/${currentSid}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: promptText, title: promptText.slice(0, 50) || "新会话" }),
-          }).catch(() => {});
-
-          const item = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
-          if (item) {
-            const titleEl = item.querySelector(".sidebar-item-title");
-            if (titleEl) titleEl.textContent = promptText.slice(0, 50) || "新会话";
-          }
-        }
+        loadSessions();
+        window.setTimeout(loadSessions, 400);
 
         const edit = state.activeEdits[currentSid];
         const timeout = Number(timeoutInput.value);
@@ -1944,8 +2702,9 @@
           rawOutput.textContent = JSON.stringify(data, null, 2);
 
           if (!response.ok) {
-            rawOutput.hidden = false;
+            rawPanel.hidden = false;
             const errorMessage = typeof data.error === "string" ? data.error : data.error?.message || data.message || "编辑失败。";
+            recordSessionOutcome(currentSid, { success: false, error: errorMessage });
             const shouldReplaceFailedPrompt = autoRetryInput.checked && retryRandomPromptInput.checked;
             if (shouldReplaceFailedPrompt && isSafetyBlockText(JSON.stringify(data))) {
               const suggestedPreset = selectRandomPromptPreset(promptInput.value);
@@ -1962,14 +2721,15 @@
           const savedOutput = data.saved?.output;
           let displayUrl = savedOutput || (first && (first.url || first.b64_json));
           if (!displayUrl) {
-            rawOutput.hidden = false;
+            rawPanel.hidden = false;
+            recordSessionOutcome(currentSid, { success: false, error: "请求成功，但返回里没有找到图片。" });
             setMessage(`请求成功，但返回里没有找到图片。用时 ${elapsedForSession(currentSid)}，请查看响应。`, true);
             playNotificationSound();
             return;
           }
 
           if (savedOutput) {
-            displayUrl = `${API_BASE}/api/file?path=${encodeURIComponent(savedOutput)}&t=${Date.now()}`;
+            displayUrl = fileUrl(savedOutput, true);
           } else if (first.b64_json) {
             displayUrl = `data:${first.mime_type || "image/png"};base64,${first.b64_json}`;
           }
@@ -1983,35 +2743,32 @@
           playNotificationSound();
         } catch (error) {
           if (error.name === "AbortError") {
+            recordSessionOutcome(currentSid, { success: false, error: "操作已取消" });
             setMessage(`操作已取消，用时 ${elapsedForSession(currentSid)}`, true);
           } else {
+            recordSessionOutcome(currentSid, { success: false, error: error.message || "无法连接本地服务" });
             setMessage(`无法连接本地服务：${error.message || "请求失败。"} 用时 ${elapsedForSession(currentSid)}`, true);
             playNotificationSound();
           }
         } finally {
-          const finalElapsed = elapsedForSession(currentSid);
+          const activeEdit = state.activeEdits[currentSid];
+          const durationMs = activeEdit ? performance.now() - activeEdit.startedAt : 0;
+          await recordSessionOutcome(currentSid, { durationMs });
           stopSessionEdit(currentSid);
           if (currentSid === state.currentSessionId) {
-            syncEditButtonState();
+            state.currentSessionId = null;
           }
           await loadSessions();
-          const doneItem = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
-          if (doneItem) {
-            const titleEl = doneItem.querySelector(".sidebar-item-title");
-            if (titleEl) {
-              const timeEl = document.createElement("div");
-              timeEl.textContent = `⏱ ${finalElapsed}`;
-              timeEl.style.cssText = "color:var(--muted);font-size:11px;margin-top:2px";
-              titleEl.after(timeEl);
-            }
-          }
         }
       });
 
       stopButton.addEventListener("click", () => {
-        const edit = state.activeEdits[state.currentSessionId];
-        if (edit && edit.abortController) {
-          edit.abortController.abort();
+        const ids = Object.keys(state.activeEdits);
+        for (const sid of ids) {
+          const edit = state.activeEdits[sid];
+          if (edit && edit.abortController) {
+            edit.abortController.abort();
+          }
         }
       });
 
@@ -2048,7 +2805,7 @@
             stopBatchPolling();
             state.currentBatchId = null;
             if (result.outputs && result.outputs.length) {
-              const url = `${API_BASE}/api/file?path=${encodeURIComponent(result.outputs[0])}&t=${Date.now()}`;
+              const url = fileUrl(result.outputs[0], true);
               showImage(resultImage, resultPlaceholder, url);
               downloadLink.href = url;
               downloadLink.hidden = false;
@@ -2084,7 +2841,7 @@
         }
 
         const provider = providerInput.value;
-        if (provider === "xai" || provider === "third-grok") {
+        if (provider === "xai" || isThirdGrokProvider(provider)) {
           setMessage("批量模式仅支持 OpenAI / 第三方 OpenAI。", true);
           return;
         }
@@ -2092,23 +2849,15 @@
         editImage.hidden = true;
         stopButton.hidden = true;
         clearResult();
-        rawOutput.hidden = true;
+        rawPanel.hidden = true;
 
-        const currentSid = state.currentSessionId;
-        if (currentSid) {
-          const titleText = `批量 ${prompts.length} 条`;
-          fetch(`${API_BASE}/api/sessions/${currentSid}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: prompts.join(" | "), title: titleText }),
-          }).catch(() => {});
-
-          const item = document.querySelector(`.sidebar-item[data-id="${currentSid}"]`);
-          if (item) {
-            const titleEl = item.querySelector(".sidebar-item-title");
-            if (titleEl) titleEl.textContent = titleText;
-          }
+        const currentSid = await createSubmissionSession(`批量 ${prompts.length} 条`, prompts.join(" | "));
+        if (!currentSid) {
+          editImage.hidden = false;
+          return;
         }
+        state.currentSessionId = currentSid;
+        loadSessions();
 
         try {
           const resp = await fetch(`${API_BASE}/api/batch`, {
@@ -2116,7 +2865,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               provider,
-              model: provider === "xai" || provider === "third-grok" ? getGrokModelName() : openaiModelInput.value,
+              model: provider === "xai" || isThirdGrokProvider(provider) ? getGrokModelName() : openaiModelInput.value,
               prompts,
               imageUrls: state.inputImages,
               n: Number(countInput.value),
@@ -2155,83 +2904,149 @@
         setMessage(`无法连接本地服务：${error.message || "请求失败。"}`, true);
       });
 
-      const sidebarEl = document.querySelector("#sidebar");
-      const sidebarToggle = document.querySelector("#sidebarToggle");
-      const sidebarExpand = document.querySelector("#sidebarExpand");
-      const newSessionButton = document.querySelector("#newSessionButton");
       const sessionSearch = document.querySelector("#sessionSearch");
+      const statusFilter = document.querySelector("#statusFilter");
+      const favoriteFilter = document.querySelector("#favoriteFilter");
       const sessionList = document.querySelector("#sessionList");
+      const sessionDetailModal = document.querySelector("#sessionDetailModal");
+      const sessionDetailPreview = document.querySelector("#sessionDetailPreview");
+      const sessionDetailPrompt = document.querySelector("#sessionDetailPrompt");
+      const sessionDetailReferences = document.querySelector("#sessionDetailReferences");
+      const detailReferencesSection = document.querySelector("#detailReferencesSection");
+      const detailReferenceCount = document.querySelector("#detailReferenceCount");
+      const sessionDetailConfig = document.querySelector("#sessionDetailConfig");
+      const sessionDetailMeta = document.querySelector("#sessionDetailMeta");
+      const closeSessionDetail = document.querySelector("#closeSessionDetail");
+      const copySessionPrompt = document.querySelector("#copySessionPrompt");
+      const reuseSessionConfig = document.querySelector("#reuseSessionConfig");
+      const openSessionOutput = document.querySelector("#openSessionOutput");
+      const deleteSessionDetail = document.querySelector("#deleteSessionDetail");
+      const favoriteSessionDetail = document.querySelector("#favoriteSessionDetail");
 
       let allSessions = [];
-      const SESSION_CACHE_KEY = "desktop_session_briefs";
-      let sessionRecoveryPending = false;
-      let sessionFilterQuery = "";
-      let sessionSearchFocused = false;
-
-      function sessionsForCurrentSearch() {
-        if (!sessionFilterQuery) return allSessions;
-        return allSessions.filter((session) => String(session.prompt || session.title || "").toLowerCase().includes(sessionFilterQuery));
-      }
-
-      function renderCurrentSessionList() {
-        renderSessions(sessionsForCurrentSearch());
-      }
-
-      const sessionListObserver = new MutationObserver(() => {
-        if (sessionRecoveryPending || sessionFilterQuery || !allSessions.length) return;
-        if (sessionList.querySelector(".sidebar-item")) return;
-        sessionRecoveryPending = true;
-        queueMicrotask(() => {
-          sessionRecoveryPending = false;
-          if (!sessionFilterQuery && allSessions.length && !sessionList.querySelector(".sidebar-item")) {
-            renderSessions(allSessions);
-            setMessage("会话列表已自动恢复。", true);
-          }
-        });
-      });
-      sessionListObserver.observe(sessionList, { childList: true });
-
-      try {
-        const cachedSessions = JSON.parse(localStorage.getItem(SESSION_CACHE_KEY) || "[]");
-        if (Array.isArray(cachedSessions) && cachedSessions.length) {
-          allSessions = cachedSessions;
-          renderCurrentSessionList();
-        }
-      } catch {}
+      let currentSessionDetail = null;
+      let favoritesOnly = false;
+      const FAVORITES_KEY = "favorite_session_ids";
+      let favoriteSessionIds = new Set();
+      try { favoriteSessionIds = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]")); } catch {}
 
       function formatTime(iso) {
         if (!iso) return "";
         const d = new Date(iso);
         const pad = (n) => String(n).padStart(2, "0");
-        return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       }
 
-      async function createNewSession() {
+      function formatDuration(milliseconds) {
+        const seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+        const minutes = Math.floor(seconds / 60);
+        return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+
+      function visibleSessionDuration(session) {
+        if (sessionStatus(session) !== "running") return Number(session.durationMs || 0);
+        const startedAt = new Date(session.createdAt || Date.now()).getTime();
+        return Math.max(0, Date.now() - startedAt);
+      }
+
+      function updateSessionCardTimers() {
+        document.querySelectorAll(".card-duration[data-status='running']").forEach((element) => {
+          const startedAt = Number(element.dataset.startedAt || Date.now());
+          element.textContent = `◷ ${formatDuration(Date.now() - startedAt)}`;
+        });
+      }
+
+      function sessionStatus(session) {
+        if (session.success) return "success";
+        if (session.error) return "failed";
+        return "running";
+      }
+
+      function sessionConfiguration(session) {
+        return session.configuration || {
+          provider: session.provider || "",
+          providerName: session.providerName || session.provider || "",
+          model: session.model || "",
+          count: session.outputCount || 1,
+        };
+      }
+
+      function providerLabel(session) {
+        const config = sessionConfiguration(session);
+        const provider = config.provider || session.provider || "";
+        if (provider.startsWith("openai-profile:")) {
+          const profileId = provider.slice("openai-profile:".length);
+          const profile = configuredThirdOpenAIProfiles.find((item) => item.id === profileId);
+          if (profile?.name) return profile.name;
+        }
+        if (provider === "openai") return "OpenAI";
+        if (provider === "xai") return "xAI / Grok";
+        if (provider === "third-grok") return "第三方 Grok";
+        if (provider.startsWith("grok-profile:")) {
+          const profile = configuredThirdGrokProfiles.find((item) => item.id === provider.slice("grok-profile:".length));
+          return profile?.name || config.providerName || "第三方 Grok";
+        }
+        if (provider === "yunwu") return "第三方 OpenAI";
+        return config.providerName || session.providerName || provider || "未记录 API";
+      }
+
+      function saveFavorites() {
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteSessionIds]));
+      }
+
+      function toggleFavorite(id) {
+        if (favoriteSessionIds.has(id)) favoriteSessionIds.delete(id);
+        else favoriteSessionIds.add(id);
+        saveFavorites();
+        renderCurrentSessionList();
+        if (currentSessionDetail?.id === id) favoriteSessionDetail.textContent = favoriteSessionIds.has(id) ? "★" : "☆";
+      }
+
+      function filteredSessions() {
+        const query = sessionSearch.value.trim().toLowerCase();
+        const status = statusFilter.value;
+        return allSessions.filter((session) => {
+          const meaningful = session.prompt || session.provider || session.inputCount || session.outputCount || session.error;
+          if (!meaningful) return false;
+          if (favoritesOnly && !favoriteSessionIds.has(session.id)) return false;
+          if (status !== "all" && sessionStatus(session) !== status) return false;
+          if (!query) return true;
+          const config = sessionConfiguration(session);
+          return [session.prompt, session.title, providerLabel(session), config.model, config.size, config.quality, config.apiMode]
+            .some((value) => String(value || "").toLowerCase().includes(query));
+        });
+      }
+
+      function renderCurrentSessionList() {
+        renderSessions(filteredSessions());
+      }
+
+      async function createSubmissionSession(title, promptOverride = "") {
         try {
           const response = await fetch(`${API_BASE}/api/sessions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "新会话" }),
+            body: JSON.stringify({
+              title: (title || promptOverride || "新记录").slice(0, 80),
+              prompt: promptOverride || title || "",
+            }),
           });
           const data = await response.json();
           if (!response.ok || !data.id) throw new Error(data.error || "创建会话失败。");
-          state.currentSessionId = data.id;
-          await loadSessions();
+          return data.id;
         } catch (error) {
-          state.currentSessionId = null;
           setMessage(error.message || "创建会话失败。", true);
+          return null;
         }
       }
 
-      async function saveCurrentSessionPrompt() {
-        if (!state.currentSessionId) return;
-        const text = promptInput.value.trim();
-        if (!text) return;
+      async function recordSessionOutcome(id, updates) {
+        if (!id) return;
         try {
-          await fetch(`${API_BASE}/api/sessions/${state.currentSessionId}`, {
+          await fetch(`${API_BASE}/api/sessions/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: text, title: text.slice(0, 50) }),
+            body: JSON.stringify(updates),
           });
         } catch {}
       }
@@ -2243,221 +3058,353 @@
           if (!response.ok) throw new Error(sessions.error || "加载会话失败。");
           if (!Array.isArray(sessions)) throw new Error("会话列表格式无效。");
           allSessions = sessions;
-          localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(allSessions));
           renderCurrentSessionList();
         } catch (error) {
-          if (!allSessions.length && !sessionList.children.length) {
-            sessionList.innerHTML = '<div class="sidebar-empty">加载失败，请重试</div>';
-          }
-          setMessage(error.message || "加载会话失败，已保留当前列表。", true);
+          sessionList.innerHTML = '<div class="session-empty">加载记录失败</div>';
+          setMessage(error.message || "加载会话失败。", true);
         }
       }
 
       function renderSessions(sessions) {
-        if (!Array.isArray(sessions)) return;
         if (!sessions.length) {
-          sessionList.innerHTML = '<div class="sidebar-empty">暂无会话记录</div>';
+          sessionList.innerHTML = '<div class="session-empty">暂无符合条件的生成记录</div>';
           return;
         }
         sessionList.innerHTML = "";
-        for (const s of sessions) {
-          const item = document.createElement("div");
-          item.className = "sidebar-item";
-          item.dataset.id = s.id;
-          if (s.id === state.currentSessionId) item.classList.add("active");
+        for (const session of sessions) {
+          const config = sessionConfiguration(session);
+          const status = sessionStatus(session);
+          const card = document.createElement("article");
+          card.className = "session-card";
+          card.dataset.id = session.id;
 
-          const title = document.createElement("div");
-          title.className = "sidebar-item-title";
-          title.textContent = s.title || s.prompt || "(无提示词)";
-          title.addEventListener("dblclick", (e) => {
-            e.stopPropagation();
-            const origTitle = title.dataset.origTitle || title.textContent;
-            const input = document.createElement("input");
-            input.type = "text";
-            input.value = origTitle === "(无提示词)" ? "" : origTitle;
-            input.style.cssText = "width:100%;border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600;outline:none";
-            title.dataset.editing = "1";
-            title.replaceWith(input);
-            input.focus();
-            input.select();
-            const save = async () => {
-              const newTitle = input.value.trim() || "无标题";
-              delete title.dataset.editing;
-              delete title.dataset.origTitle;
-              title.textContent = newTitle;
-              input.replaceWith(title);
-              try {
-                await fetch(`${API_BASE}/api/sessions/${s.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ title: newTitle }),
-                });
-                if (s.id === state.currentSessionId) {
-                  const sessionTitleEl = item.querySelector(".sidebar-item-title");
-                  if (sessionTitleEl) sessionTitleEl.textContent = newTitle;
-                }
-              } catch {}
-            };
-            input.addEventListener("blur", save);
-            input.addEventListener("keydown", (ke) => {
-              if (ke.key === "Enter") { ke.preventDefault(); input.blur(); }
-              if (ke.key === "Escape") { input.value = origTitle === "(无提示词)" ? "" : origTitle; input.blur(); }
-            });
+          const media = document.createElement("div");
+          media.className = "session-card-media";
+          const duration = document.createElement("span");
+          duration.className = "card-duration";
+          duration.dataset.status = status;
+          duration.dataset.startedAt = String(new Date(session.createdAt || Date.now()).getTime());
+          duration.textContent = `◷ ${formatDuration(visibleSessionDuration(session))}`;
+          media.appendChild(duration);
+          if (session.outputThumb) {
+            const image = document.createElement("img");
+            image.src = fileUrl(session.outputThumb);
+            image.alt = "生成结果";
+            image.loading = "lazy";
+            media.appendChild(image);
+          } else {
+            const stateBox = document.createElement("div");
+            stateBox.className = `card-status ${status}`;
+            stateBox.innerHTML = status === "running"
+              ? '<span class="card-status-icon">◌</span><strong>生成中</strong>'
+              : '<span class="card-status-icon">!</span><strong>失败</strong>';
+            media.appendChild(stateBox);
+          }
+
+          const body = document.createElement("div");
+          body.className = "session-card-body";
+          const prompt = document.createElement("p");
+          prompt.className = "session-card-prompt";
+          prompt.textContent = session.prompt || session.title || "无提示词";
+          const submittedAt = document.createElement("time");
+          submittedAt.className = "card-submitted-at";
+          submittedAt.dateTime = session.createdAt || "";
+          submittedAt.textContent = `最近提交 ${formatTime(session.createdAt)}`;
+          const chips = document.createElement("div");
+          chips.className = "config-chips";
+          [
+            [providerLabel(session), "provider"],
+            [config.keyNote ? `Key: ${config.keyNote}` : "", ""],
+            [config.model || session.model, ""],
+            [config.size || config.aspectRatio, ""],
+            [config.quality || config.resolution, ""],
+            [config.outputFormat, ""],
+            [config.count ? `${config.count} 张` : "", ""],
+          ].filter(([value]) => value).forEach(([value, className]) => {
+            const chip = document.createElement("span");
+            chip.className = `config-chip ${className}`;
+            chip.textContent = value;
+            chips.appendChild(chip);
           });
 
-          const meta = document.createElement("div");
-          meta.className = "sidebar-item-meta";
-          const statusIcon = s.success ? "✓" : "✗";
-          meta.textContent = `${statusIcon} ${formatTime(s.createdAt)} · ${s.provider || ""}`;
-
-          item.append(title, meta);
-
-          if (s.outputThumb) {
-            const thumb = document.createElement("img");
-            thumb.className = "sidebar-item-thumb";
-            thumb.src = `${API_BASE}/api/file?path=${encodeURIComponent(s.outputThumb)}`;
-            thumb.alt = "缩略图";
-            thumb.loading = "lazy";
-            item.appendChild(thumb);
-          }
-
-          if (!s.success && s.id) {
-            const errorDiv = document.createElement("div");
-            errorDiv.className = "sidebar-item-error";
-            errorDiv.textContent = "生成失败";
-            item.appendChild(errorDiv);
-          }
-
-          const deleteBtn = document.createElement("button");
-          deleteBtn.type = "button";
-          deleteBtn.className = "sidebar-item-delete";
-          deleteBtn.textContent = "×";
-          deleteBtn.addEventListener("click", async (event) => {
+          const actions = document.createElement("div");
+          actions.className = "card-actions";
+          const favorite = document.createElement("button");
+          favorite.type = "button";
+          favorite.title = "收藏";
+          favorite.textContent = favoriteSessionIds.has(session.id) ? "★" : "☆";
+          favorite.addEventListener("click", (event) => { event.stopPropagation(); toggleFavorite(session.id); });
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.title = "重新生成";
+          retry.textContent = "↻";
+          retry.addEventListener("click", async (event) => {
             event.stopPropagation();
-            event.preventDefault();
-            const resp = await fetch(`${API_BASE}/api/sessions/${s.id}`, { method: "DELETE" });
-            const result = await resp.json();
-            if (!resp.ok) {
-              setMessage(result.error || "删除失败。", true);
-              return;
-            }
-            if (state.currentSessionId === s.id) {
-              state.currentSessionId = null;
-            }
-            await loadSessions();
-            if (!state.currentSessionId) {
-              await createNewSession();
-            }
-            setMessage("已删除会话。");
+            const detail = await fetchSessionDetail(session.id);
+            if (detail) retrySession(detail);
           });
-          item.appendChild(deleteBtn);
-
-          item.addEventListener("click", async () => {
-            if (!sessionFilterQuery) sessionSearch.value = "";
-            sidebarEl.classList.remove("collapsed");
-            document.body.classList.remove("sidebar-collapsed");
-            sidebarExpand.hidden = true;
-            await saveCurrentSessionPrompt();
-            try {
-              const resp = await fetch(`${API_BASE}/api/sessions/${s.id}`);
-              const detail = await resp.json();
-              if (!resp.ok) throw new Error(detail.error || "加载会话详情失败。");
-              if (!detail || detail.id !== s.id) throw new Error("会话详情格式无效。");
-              state.currentSessionId = s.id;
-              if (detail.prompt) promptInput.value = detail.prompt;
-              state.inputImages = [];
-              imageFile.value = "";
-              if (detail.inputPaths) {
-                for (const p of detail.inputPaths) {
-                  state.inputImages.push(`${API_BASE}/api/file?path=${encodeURIComponent(p)}`);
-                }
-              }
-              renderSourceList();
-              clearResult();
-              if (detail.outputPaths && detail.outputPaths.length) {
-                const url = `${API_BASE}/api/file?path=${encodeURIComponent(detail.outputPaths[0])}`;
-                showImage(resultImage, resultPlaceholder, url);
-                downloadLink.href = url;
-                downloadLink.hidden = false;
-              }
-              if (detail.error) {
-                setMessage(detail.error, true);
-              } else {
-                setMessage("已加载会话记录。");
-              }
-              sessionList.querySelectorAll(".sidebar-item").forEach((element) => element.classList.remove("active"));
-              item.classList.add("active");
-              requestAnimationFrame(() => {
-                if (!sessionFilterQuery && allSessions.length && !sessionList.querySelector(".sidebar-item")) {
-                  renderSessions(allSessions);
-                }
-              });
-              syncEditButtonState();
-            } catch (error) {
-              setMessage(error.message || "加载会话详情失败。", true);
-            }
+          const reuse = document.createElement("button");
+          reuse.type = "button";
+          reuse.title = "复用配置";
+          reuse.textContent = "↩";
+          reuse.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            const detail = await fetchSessionDetail(session.id);
+            if (detail) reuseConfiguration(detail);
           });
-
-          sessionList.appendChild(item);
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "delete-card";
+          remove.title = "删除记录";
+          remove.textContent = "×";
+          remove.addEventListener("click", (event) => { event.stopPropagation(); deleteSession(session.id); });
+          actions.append(favorite, retry, reuse, remove);
+          body.append(prompt, submittedAt, chips, actions);
+          card.append(media, body);
+          card.addEventListener("click", () => openSessionDetail(session.id));
+          sessionList.appendChild(card);
         }
       }
 
-      sessionSearch.value = "";
-      sessionSearch.addEventListener("focus", () => {
-        sessionSearchFocused = true;
-        sessionSearch.readOnly = false;
-        if (!sessionFilterQuery) sessionSearch.value = "";
-      });
-      sessionSearch.addEventListener("blur", () => {
-        sessionSearchFocused = false;
-      });
-      sessionSearch.addEventListener("input", () => {
-        if (!sessionSearchFocused) {
-          sessionSearch.value = sessionFilterQuery;
-          return;
+      async function fetchSessionDetail(id) {
+        try {
+          const response = await fetch(`${API_BASE}/api/sessions/${id}`);
+          const detail = await response.json();
+          if (!response.ok) throw new Error(detail.error || "加载会话详情失败。");
+          return detail;
+        } catch (error) {
+          setMessage(error.message || "加载会话详情失败。", true);
+          return null;
         }
-        sessionFilterQuery = sessionSearch.value.trim().toLowerCase();
-        renderCurrentSessionList();
-      });
-      setTimeout(() => {
-        if (!sessionSearchFocused && !sessionFilterQuery) sessionSearch.value = "";
-      }, 500);
+      }
 
-      newSessionButton.addEventListener("click", async () => {
-        await saveCurrentSessionPrompt();
-        state.inputImages = [];
+      function appendDetailConfig(label, value) {
+        if (value === undefined || value === null || value === "") return;
+        const item = document.createElement("div");
+        item.className = "detail-config-item";
+        const name = document.createElement("span");
+        name.textContent = label;
+        const content = document.createElement("strong");
+        content.textContent = String(value);
+        content.title = String(value);
+        item.append(name, content);
+        sessionDetailConfig.appendChild(item);
+      }
+
+      async function openSessionDetail(id) {
+        const detail = await fetchSessionDetail(id);
+        if (!detail) return;
+        currentSessionDetail = detail;
+        const config = sessionConfiguration(detail);
+        sessionDetailPrompt.textContent = detail.prompt || detail.title || "无提示词";
+        sessionDetailPreview.innerHTML = "";
+        openSessionOutput.hidden = true;
+        if (detail.outputPaths?.length) {
+          const outputUrl = fileUrl(detail.outputPaths[0]);
+          const image = document.createElement("img");
+          image.src = outputUrl;
+          image.alt = "生成结果";
+          image.addEventListener("click", () => { lightboxImage.src = outputUrl; lightbox.hidden = false; });
+          sessionDetailPreview.appendChild(image);
+          openSessionOutput.href = outputUrl;
+          openSessionOutput.hidden = false;
+        } else if (sessionStatus(detail) === "running") {
+          const running = document.createElement("div");
+          running.className = "detail-running";
+          running.innerHTML = '<span class="detail-running-spinner" aria-hidden="true"></span><span>任务正在执行</span>';
+          sessionDetailPreview.appendChild(running);
+        } else {
+          const error = document.createElement("div");
+          error.className = "detail-error";
+          error.innerHTML = '<span class="card-status-icon">!</span>';
+          error.append(document.createTextNode(detail.error || "生成失败"));
+          sessionDetailPreview.appendChild(error);
+        }
+
+        sessionDetailReferences.innerHTML = "";
+        const inputPaths = detail.inputPaths || [];
+        detailReferencesSection.hidden = !inputPaths.length;
+        detailReferenceCount.textContent = inputPaths.length ? `${inputPaths.length} 张` : "";
+        inputPaths.forEach((path) => {
+          const image = document.createElement("img");
+          image.src = fileUrl(path);
+          image.alt = "参考图";
+          image.addEventListener("click", () => { lightboxImage.src = image.src; lightbox.hidden = false; });
+          sessionDetailReferences.appendChild(image);
+        });
+
+        sessionDetailConfig.innerHTML = "";
+        appendDetailConfig("API", providerLabel(detail));
+        appendDetailConfig("接口地址", config.apiBaseUrl);
+        appendDetailConfig("接口模式", config.apiMode);
+        appendDetailConfig("使用 Key", config.keyNote ? `${config.keyNote}${config.keyMasked ? ` (${config.keyMasked})` : ""}` : "");
+        appendDetailConfig("模型", config.model || detail.model);
+        appendDetailConfig("尺寸 / 比例", config.size || config.aspectRatio);
+        appendDetailConfig("质量 / 分辨率", config.quality || config.resolution);
+        appendDetailConfig("格式", config.outputFormat);
+        appendDetailConfig("背景", config.background);
+        appendDetailConfig("审核", config.moderation);
+        appendDetailConfig("数量", config.count);
+        appendDetailConfig("输入保真度", config.inputFidelity);
+        sessionDetailMeta.textContent = `创建于 ${formatTime(detail.createdAt)} · 耗时 ${formatDuration(detail.durationMs)}`;
+        favoriteSessionDetail.textContent = favoriteSessionIds.has(id) ? "★" : "☆";
+        sessionDetailModal.hidden = false;
+      }
+
+      function ensureSelectValue(select, value) {
+        if (!value) return;
+        let option = [...select.options].find((item) => item.value === value);
+        if (!option) {
+          option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          select.appendChild(option);
+        }
+        select.value = value;
+      }
+
+      function reuseConfiguration(detail) {
+        const config = sessionConfiguration(detail);
+        const provider = config.provider || detail.provider;
+        if (provider && ![...providerInput.options].some((option) => option.value === provider)) {
+          setMessage(`原记录使用的 API 配置已不存在：${providerLabel(detail)}`, true);
+          return false;
+        }
+        promptInput.value = detail.prompt || "";
+        state.inputImages = (detail.inputPaths || []).map((path) => fileUrl(path));
         imageFile.value = "";
         renderSourceList();
-        clearResult();
-        promptInput.value = "";
-        sessionList.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
-        await createNewSession();
-        syncEditButtonState();
-        setMessage("已新建会话。");
-      });
 
-      sidebarToggle.addEventListener("click", () => {
-        sidebarEl.classList.add("collapsed");
-        document.body.classList.add("sidebar-collapsed");
-        sidebarExpand.hidden = false;
-      });
+        if (provider) providerInput.value = provider;
+        updateProviderFields();
+        if (provider === "xai") ensureSelectValue(modelInput, config.model || detail.model);
+        else if (isThirdGrokProvider(provider)) customGrokModelInput.value = config.model || detail.model || customGrokModelInput.value;
+        else ensureSelectValue(openaiModelInput, config.model || detail.model);
 
-      sidebarExpand.addEventListener("click", () => {
-        sidebarEl.classList.remove("collapsed");
-        document.body.classList.remove("sidebar-collapsed");
-        sidebarExpand.hidden = true;
-      });
+        if (config.size) state.size = config.size;
+        if (config.quality) state.quality = config.quality;
+        if (config.aspectRatio) state.grokAspectRatio = config.aspectRatio;
+        if (config.resolution) state.grokResolution = config.resolution;
+        if (config.count) countInput.value = String(config.count);
+        if (config.outputFormat) openaiOutputFormatInput.value = config.outputFormat;
+        if (config.background) openaiBackgroundInput.value = config.background;
+        if (config.moderation) openaiModerationInput.value = config.moderation;
+        if (config.partialImages !== undefined) openaiPartialImagesInput.value = String(config.partialImages);
+        if (config.inputFidelity) openaiInputFidelityInput.value = config.inputFidelity;
+        updateMenuChecks();
+        sessionDetailModal.hidden = true;
+        promptInput.focus();
+        setMessage("已将该记录的提示词、参考图和提交配置复用到工作台。");
+        return true;
+      }
 
-      loadSessions().then(() => {
-        if (!state.currentSessionId) {
-          if (allSessions.length) {
-            state.currentSessionId = allSessions[0].id;
-            renderCurrentSessionList();
-          } else {
-            createNewSession();
-          }
+      function retrySession(detail) {
+        if (Object.keys(state.activeEdits).length || state.currentBatchId) {
+          setMessage("当前已有任务正在生成，请等待完成后再重试。", true);
+          return;
+        }
+        if (!detail.inputPaths?.length) {
+          setMessage("该记录没有可用的参考图，无法重新生成。", true);
+          return;
+        }
+        if (!reuseConfiguration(detail)) return;
+
+        const config = sessionConfiguration(detail);
+        const isBatch = config.apiMode === "batch";
+        batchMode.value = isBatch ? "batch" : "single";
+        if (isBatch) promptInput.value = String(detail.prompt || "").split(" | ").join("\n");
+        batchMode.dispatchEvent(new Event("change"));
+        setMessage("正在使用原配置重新提交...");
+        window.setTimeout(() => editImage.click(), 0);
+      }
+
+      async function deleteSession(id) {
+        const response = await fetch(`${API_BASE}/api/sessions/${id}`, { method: "DELETE" });
+        const result = await response.json();
+        if (!response.ok) {
+          setMessage(result.error || "删除失败。", true);
+          return;
+        }
+        favoriteSessionIds.delete(id);
+        saveFavorites();
+        if (currentSessionDetail?.id === id) sessionDetailModal.hidden = true;
+        currentSessionDetail = null;
+        await loadSessions();
+        setMessage("已删除记录。");
+      }
+
+      let searchUserActivated = false;
+      let searchKeyboardFocus = false;
+      let acceptedSearchValue = "";
+      const activateSessionSearch = () => {
+        searchUserActivated = true;
+        sessionSearch.readOnly = false;
+      };
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Tab") return;
+        searchKeyboardFocus = true;
+        window.setTimeout(() => { searchKeyboardFocus = false; }, 0);
+      }, true);
+      sessionSearch.addEventListener("pointerdown", activateSessionSearch);
+      sessionSearch.addEventListener("keydown", activateSessionSearch);
+      sessionSearch.addEventListener("focus", () => {
+        if (!searchUserActivated && !searchKeyboardFocus) {
+          sessionSearch.value = acceptedSearchValue;
+          sessionSearch.blur();
         }
       });
+      sessionSearch.addEventListener("input", () => {
+        if (!searchUserActivated) {
+          sessionSearch.value = acceptedSearchValue;
+          return;
+        }
+        acceptedSearchValue = sessionSearch.value;
+        renderCurrentSessionList();
+      });
+      sessionSearch.addEventListener("blur", () => {
+        searchUserActivated = false;
+        sessionSearch.readOnly = true;
+      });
+      const clearUnexpectedSearchAutofill = () => {
+        if (searchUserActivated) return;
+        const changed = sessionSearch.value !== acceptedSearchValue;
+        sessionSearch.value = acceptedSearchValue;
+        sessionSearch.readOnly = true;
+        if (changed) renderCurrentSessionList();
+      };
+      window.addEventListener("pageshow", clearUnexpectedSearchAutofill);
+      [100, 500, 1500].forEach((delay) => window.setTimeout(clearUnexpectedSearchAutofill, delay));
+      statusFilter.addEventListener("change", renderCurrentSessionList);
+      favoriteFilter.addEventListener("click", () => {
+        favoritesOnly = !favoritesOnly;
+        favoriteFilter.classList.toggle("active", favoritesOnly);
+        favoriteFilter.textContent = favoritesOnly ? "★" : "☆";
+        renderCurrentSessionList();
+      });
+      closeSessionDetail.addEventListener("click", () => { sessionDetailModal.hidden = true; });
+      sessionDetailModal.addEventListener("click", (event) => {
+        if (event.target === sessionDetailModal) sessionDetailModal.hidden = true;
+      });
+      copySessionPrompt.addEventListener("click", async () => {
+        if (!currentSessionDetail) return;
+        await navigator.clipboard.writeText(currentSessionDetail.prompt || "");
+        setMessage("提示词已复制。");
+      });
+      reuseSessionConfig.addEventListener("click", () => {
+        if (currentSessionDetail) reuseConfiguration(currentSessionDetail);
+      });
+      deleteSessionDetail.addEventListener("click", () => {
+        if (currentSessionDetail) deleteSession(currentSessionDetail.id);
+      });
+      favoriteSessionDetail.addEventListener("click", () => {
+        if (currentSessionDetail) toggleFavorite(currentSessionDetail.id);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !sessionDetailModal.hidden) sessionDetailModal.hidden = true;
+      });
+
+      window.setInterval(updateSessionCardTimers, 500);
+      loadSessions();
     </script>
   </body>
 </html>

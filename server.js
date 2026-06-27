@@ -5,6 +5,7 @@ const os = require("os");
 const { spawn } = require("child_process");
 
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = __dirname;
 
 function pad(n) {
@@ -88,23 +89,53 @@ function thirdOpenAIProfiles(config) {
   const profiles = Array.isArray(config.thirdOpenAIProfiles)
     ? config.thirdOpenAIProfiles
         .filter((profile) => profile && profile.id)
-        .map((profile) => ({
-          id: String(profile.id),
-          name: String(profile.name || "第三方 GPT"),
-          apiKey: String(profile.apiKey || ""),
-          baseUrl: String(profile.baseUrl || YUNWU_BASE_URL).replace(/\/+$/, ""),
-          model: String(profile.model || "gpt-image-2"),
-          mode: profile.mode === "tasks" ? "tasks" : "edits",
-          resolution: ["1k", "2k", "4k"].includes(String(profile.resolution).toLowerCase())
-            ? String(profile.resolution).toLowerCase()
-            : "2k",
-        }))
+        .map((profile) => {
+          const profileId = String(profile.id);
+          const keys = Array.isArray(profile.keys)
+            ? profile.keys
+                .filter((key) => key && key.apiKey)
+                .map((key, index) => ({
+                  id: String(key.id || `${profileId}-key-${index + 1}`),
+                  note: String(key.note || `Key ${index + 1}`).trim(),
+                  apiKey: String(key.apiKey || "").trim(),
+                }))
+            : [];
+          if (!keys.length && profile.apiKey) {
+            keys.push({
+              id: `${profileId}-legacy-key`,
+              note: String(profile.keyNote || "默认 Key").trim(),
+              apiKey: String(profile.apiKey).trim(),
+            });
+          }
+          const requestedActiveKeyId = String(profile.activeKeyId || "");
+          const activeKeyId = keys.some((key) => key.id === requestedActiveKeyId)
+            ? requestedActiveKeyId
+            : keys[0]?.id || "";
+          const activeKey = keys.find((key) => key.id === activeKeyId) || null;
+          return {
+            id: profileId,
+            name: String(profile.name || "第三方 GPT"),
+            keys,
+            activeKeyId,
+            apiKey: activeKey?.apiKey || "",
+            keyNote: activeKey?.note || "",
+            baseUrl: String(profile.baseUrl || YUNWU_BASE_URL).replace(/\/+$/, ""),
+            model: String(profile.model || "gpt-image-2"),
+            mode: profile.mode === "tasks" ? "tasks" : "edits",
+            resolution: ["1k", "2k", "4k"].includes(String(profile.resolution).toLowerCase())
+              ? String(profile.resolution).toLowerCase()
+              : "2k",
+          };
+        })
     : [];
   if (!profiles.length && (config.yunwuApiKey || config.yunwuBaseUrl)) {
     profiles.push({
       id: "legacy-yunwu",
       name: "默认第三方 GPT",
+      keys: [{ id: "legacy-yunwu-key", note: "默认 Key", apiKey: String(config.yunwuApiKey || "") }],
+      activeKeyId: "legacy-yunwu-key",
       apiKey: String(config.yunwuApiKey || ""),
+      keyNote: "默认 Key",
       baseUrl: String(config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, ""),
       model: "gpt-image-2",
       mode: "edits",
@@ -124,6 +155,15 @@ function publicThirdOpenAIProfiles(config) {
     resolution: profile.resolution,
     saved: Boolean(profile.apiKey),
     masked: maskKey(profile.apiKey),
+    activeKeyId: profile.activeKeyId,
+    keyNote: profile.keyNote,
+    keys: profile.keys.map((key) => ({
+      id: key.id,
+      note: key.note,
+      saved: Boolean(key.apiKey),
+      masked: maskKey(key.apiKey),
+      active: key.id === profile.activeKeyId,
+    })),
   }));
 }
 
@@ -134,6 +174,72 @@ function thirdOpenAIProfileId(provider) {
 function resolveThirdOpenAIProfile(config, provider) {
   const id = thirdOpenAIProfileId(provider);
   return id ? thirdOpenAIProfiles(config).find((profile) => profile.id === id) || null : null;
+}
+
+function thirdGrokProfiles(config) {
+  const source = Array.isArray(config.thirdGrokProfiles) ? config.thirdGrokProfiles : [];
+  const profiles = source.filter((profile) => profile && profile.id).map((profile) => {
+    const profileId = String(profile.id);
+    const keys = Array.isArray(profile.keys)
+      ? profile.keys.filter((key) => key && key.apiKey).map((key, index) => ({
+          id: String(key.id || `${profileId}-key-${index + 1}`),
+          note: String(key.note || `Key ${index + 1}`).trim(),
+          apiKey: String(key.apiKey || "").trim(),
+        }))
+      : [];
+    if (!keys.length && profile.apiKey) {
+      keys.push({ id: `${profileId}-legacy-key`, note: String(profile.keyNote || "默认 Key"), apiKey: String(profile.apiKey).trim() });
+    }
+    const requested = String(profile.activeKeyId || "");
+    const activeKeyId = keys.some((key) => key.id === requested) ? requested : keys[0]?.id || "";
+    const activeKey = keys.find((key) => key.id === activeKeyId) || null;
+    return {
+      id: profileId,
+      name: String(profile.name || "第三方 Grok"),
+      keys,
+      activeKeyId,
+      apiKey: activeKey?.apiKey || "",
+      keyNote: activeKey?.note || "",
+      baseUrl: String(profile.baseUrl || XAI_BASE_URL).replace(/\/+$/, ""),
+      model: String(profile.model || "grok-imagine-image"),
+    };
+  });
+  if (!profiles.length && (config.thirdGrokApiKey || config.thirdGrokBaseUrl || config.thirdGrokModel)) {
+    profiles.push({
+      id: "legacy-third-grok",
+      name: "默认第三方 Grok",
+      keys: [{ id: "legacy-third-grok-key", note: "默认 Key", apiKey: String(config.thirdGrokApiKey || "") }],
+      activeKeyId: "legacy-third-grok-key",
+      apiKey: String(config.thirdGrokApiKey || ""),
+      keyNote: "默认 Key",
+      baseUrl: String(config.thirdGrokBaseUrl || XAI_BASE_URL).replace(/\/+$/, ""),
+      model: String(config.thirdGrokModel || "grok-imagine-image"),
+    });
+  }
+  return profiles;
+}
+
+function publicThirdGrokProfiles(config) {
+  return thirdGrokProfiles(config).map((profile) => ({
+    id: profile.id,
+    name: profile.name,
+    baseUrl: profile.baseUrl,
+    model: profile.model,
+    saved: Boolean(profile.apiKey),
+    masked: maskKey(profile.apiKey),
+    activeKeyId: profile.activeKeyId,
+    keyNote: profile.keyNote,
+    keys: profile.keys.map((key) => ({ id: key.id, note: key.note, saved: Boolean(key.apiKey), masked: maskKey(key.apiKey), active: key.id === profile.activeKeyId })),
+  }));
+}
+
+function thirdGrokProfileId(provider) {
+  return provider.startsWith("grok-profile:") ? provider.slice("grok-profile:".length) : "";
+}
+
+function resolveThirdGrokProfile(config, provider) {
+  const id = thirdGrokProfileId(provider);
+  return id ? thirdGrokProfiles(config).find((profile) => profile.id === id) || null : null;
 }
 
 async function readSessions() {
@@ -899,9 +1005,11 @@ async function handleRequest(req, res) {
         yunwuMasked: maskKey(config.yunwuApiKey),
         yunwuBaseUrl: config.yunwuBaseUrl || YUNWU_BASE_URL,
         thirdOpenAIProfiles: publicThirdOpenAIProfiles(config),
+        thirdGrokProfiles: publicThirdGrokProfiles(config),
         thirdGrokSaved: Boolean(config.thirdGrokApiKey),
         thirdGrokMasked: maskKey(config.thirdGrokApiKey),
         thirdGrokBaseUrl: config.thirdGrokBaseUrl || XAI_BASE_URL,
+        thirdGrokModel: config.thirdGrokModel || "",
       });
       return;
     }
@@ -911,7 +1019,8 @@ async function handleRequest(req, res) {
       const apiKey = String(body.apiKey || "").trim();
       const provider = String(body.provider || "xai").trim();
       const baseUrl = String(body.baseUrl || "").trim();
-      if (!apiKey && provider !== "yunwu-url" && provider !== "third-grok-url") {
+      const model = String(body.model || "").trim();
+      if (!apiKey && provider !== "yunwu-url" && provider !== "third-grok-url" && !model) {
         sendJson(res, 400, { error: "API key 不能为空。" });
         return;
       }
@@ -924,8 +1033,9 @@ async function handleRequest(req, res) {
       } else if (provider === "yunwu-url") {
         config.yunwuBaseUrl = (baseUrl || YUNWU_BASE_URL).replace(/\/+$/, "");
       } else if (provider === "third-grok") {
-        config.thirdGrokApiKey = apiKey;
+        if (apiKey) config.thirdGrokApiKey = apiKey;
         if (baseUrl) config.thirdGrokBaseUrl = baseUrl.replace(/\/+$/, "");
+        if (model) config.thirdGrokModel = String(model).trim();
       } else if (provider === "third-grok-url") {
         config.thirdGrokBaseUrl = (baseUrl || XAI_BASE_URL).replace(/\/+$/, "");
       } else {
@@ -938,7 +1048,191 @@ async function handleRequest(req, res) {
         masked: maskKey(apiKey),
         yunwuBaseUrl: config.yunwuBaseUrl || YUNWU_BASE_URL,
         thirdGrokBaseUrl: config.thirdGrokBaseUrl || XAI_BASE_URL,
+        thirdGrokModel: config.thirdGrokModel || "",
       });
+      return;
+    }
+
+    const grokProfileKeyMatch = url.pathname.match(/^\/api\/grok-profiles\/([^/]+)\/keys(?:\/([^/]+))?$/);
+    if (grokProfileKeyMatch) {
+      const profileId = decodeURIComponent(grokProfileKeyMatch[1]);
+      const keyId = grokProfileKeyMatch[2] ? decodeURIComponent(grokProfileKeyMatch[2]) : "";
+      const config = await readConfig();
+      const profiles = thirdGrokProfiles(config);
+      const profile = profiles.find((item) => item.id === profileId);
+      if (!profile) { sendJson(res, 404, { error: "第三方 Grok 配置不存在。" }); return; }
+      if (req.method === "POST" && !keyId) {
+        const body = await readJson(req);
+        const apiKey = String(body.apiKey || "").trim();
+        const note = String(body.note || `Key ${profile.keys.length + 1}`).trim();
+        if (!apiKey || !note) { sendJson(res, 400, { error: "Key 内容和备注不能为空。" }); return; }
+        const newKey = { id: generateId(), note, apiKey };
+        profile.keys.push(newKey);
+        if (body.active || !profile.activeKeyId) profile.activeKeyId = newKey.id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || newKey;
+        profile.apiKey = activeKey.apiKey; profile.keyNote = activeKey.note;
+        config.thirdGrokProfiles = profiles; await saveConfig(config);
+        sendJson(res, 200, { saved: true, keyId: newKey.id, profile: publicThirdGrokProfiles(config).find((item) => item.id === profileId) }); return;
+      }
+      if (req.method === "PATCH" && keyId) {
+        const body = await readJson(req);
+        const key = profile.keys.find((item) => item.id === keyId);
+        if (!key) { sendJson(res, 404, { error: "API Key 不存在。" }); return; }
+        if (body.note !== undefined) {
+          const note = String(body.note || "").trim();
+          if (!note) { sendJson(res, 400, { error: "Key 备注不能为空。" }); return; }
+          key.note = note;
+        }
+        if (body.apiKey) key.apiKey = String(body.apiKey).trim();
+        if (body.active) profile.activeKeyId = key.id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || profile.keys[0];
+        profile.activeKeyId = activeKey?.id || ""; profile.apiKey = activeKey?.apiKey || ""; profile.keyNote = activeKey?.note || "";
+        config.thirdGrokProfiles = profiles; await saveConfig(config);
+        sendJson(res, 200, { saved: true, keyId: key.id, profile: publicThirdGrokProfiles(config).find((item) => item.id === profileId) }); return;
+      }
+      if (req.method === "DELETE" && keyId) {
+        const index = profile.keys.findIndex((item) => item.id === keyId);
+        if (index === -1) { sendJson(res, 404, { error: "API Key 不存在。" }); return; }
+        if (profile.keys.length <= 1) { sendJson(res, 400, { error: "一个配置至少需要保留一个 API Key。" }); return; }
+        profile.keys.splice(index, 1);
+        if (profile.activeKeyId === keyId) profile.activeKeyId = profile.keys[0].id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || profile.keys[0];
+        profile.apiKey = activeKey.apiKey; profile.keyNote = activeKey.note;
+        config.thirdGrokProfiles = profiles; await saveConfig(config);
+        sendJson(res, 200, { deleted: true, profile: publicThirdGrokProfiles(config).find((item) => item.id === profileId) }); return;
+      }
+      sendJson(res, 405, { error: "不支持的 Key 操作。" }); return;
+    }
+
+    const grokProfileMatch = url.pathname.match(/^\/api\/grok-profiles(?:\/([^/]+))?$/);
+    if (grokProfileMatch) {
+      const profileId = grokProfileMatch[1] ? decodeURIComponent(grokProfileMatch[1]) : "";
+      if (req.method === "POST" && !profileId) {
+        const body = await readJson(req);
+        const config = await readConfig();
+        const profiles = thirdGrokProfiles(config);
+        const id = String(body.id || generateId()).trim();
+        const index = profiles.findIndex((profile) => profile.id === id);
+        const existing = index >= 0 ? profiles[index] : null;
+        const keys = existing?.keys.map((key) => ({ ...key })) || [];
+        const incomingKey = String(body.apiKey || "").trim();
+        let activeKeyId = existing?.activeKeyId || keys[0]?.id || "";
+        if (incomingKey) {
+          const active = keys.find((key) => key.id === activeKeyId);
+          if (active) { active.apiKey = incomingKey; if (body.keyNote) active.note = String(body.keyNote).trim(); }
+          else { const key = { id: generateId(), note: String(body.keyNote || "默认 Key").trim(), apiKey: incomingKey }; keys.push(key); activeKeyId = key.id; }
+        }
+        const active = keys.find((key) => key.id === activeKeyId) || keys[0] || null;
+        const profile = {
+          id,
+          name: String(body.name || existing?.name || `第三方 Grok ${profiles.length + 1}`).trim(),
+          keys,
+          activeKeyId: active?.id || "",
+          apiKey: active?.apiKey || "",
+          keyNote: active?.note || "",
+          baseUrl: String(body.baseUrl || existing?.baseUrl || XAI_BASE_URL).trim().replace(/\/+$/, ""),
+          model: String(body.model || existing?.model || "grok-imagine-image").trim(),
+        };
+        if (!profile.name || !profile.apiKey || !profile.baseUrl || !profile.model) { sendJson(res, 400, { error: "名称、API Key、Base URL 和模型名不能为空。" }); return; }
+        if (index >= 0) profiles[index] = profile; else profiles.push(profile);
+        config.thirdGrokProfiles = profiles; await saveConfig(config);
+        sendJson(res, 200, { saved: true, profile: publicThirdGrokProfiles(config).find((item) => item.id === id) }); return;
+      }
+      if (req.method === "DELETE" && profileId) {
+        const config = await readConfig(); const profiles = thirdGrokProfiles(config);
+        const index = profiles.findIndex((profile) => profile.id === profileId);
+        if (index === -1) { sendJson(res, 404, { error: "第三方 Grok 配置不存在。" }); return; }
+        profiles.splice(index, 1); config.thirdGrokProfiles = profiles;
+        if (profileId === "legacy-third-grok") { delete config.thirdGrokApiKey; delete config.thirdGrokBaseUrl; delete config.thirdGrokModel; }
+        await saveConfig(config); sendJson(res, 200, { deleted: true }); return;
+      }
+      sendJson(res, 405, { error: "不支持的操作。" }); return;
+    }
+
+    const openAIProfileKeyMatch = url.pathname.match(/^\/api\/openai-profiles\/([^/]+)\/keys(?:\/([^/]+))?$/);
+    if (openAIProfileKeyMatch) {
+      const profileId = decodeURIComponent(openAIProfileKeyMatch[1]);
+      const keyId = openAIProfileKeyMatch[2] ? decodeURIComponent(openAIProfileKeyMatch[2]) : "";
+      const config = await readConfig();
+      const profiles = thirdOpenAIProfiles(config);
+      const profile = profiles.find((item) => item.id === profileId);
+      if (!profile) {
+        sendJson(res, 404, { error: "第三方 GPT 配置不存在。" });
+        return;
+      }
+
+      if (req.method === "POST" && !keyId) {
+        const body = await readJson(req);
+        const apiKey = String(body.apiKey || "").trim();
+        const note = String(body.note || `Key ${profile.keys.length + 1}`).trim();
+        if (!apiKey || !note) {
+          sendJson(res, 400, { error: "Key 内容和备注不能为空。" });
+          return;
+        }
+        const newKey = { id: generateId(), note, apiKey };
+        profile.keys.push(newKey);
+        if (body.active || !profile.activeKeyId) profile.activeKeyId = newKey.id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || newKey;
+        profile.apiKey = activeKey.apiKey;
+        profile.keyNote = activeKey.note;
+        config.thirdOpenAIProfiles = profiles;
+        await saveConfig(config);
+        log(`第三方 GPT Key 已添加: ${profile.name} / ${note}`);
+        sendJson(res, 200, { saved: true, keyId: newKey.id, profile: publicThirdOpenAIProfiles(config).find((item) => item.id === profileId) });
+        return;
+      }
+
+      if (req.method === "PATCH" && keyId) {
+        const body = await readJson(req);
+        const key = profile.keys.find((item) => item.id === keyId);
+        if (!key) {
+          sendJson(res, 404, { error: "API Key 不存在。" });
+          return;
+        }
+        if (body.note !== undefined) {
+          const note = String(body.note || "").trim();
+          if (!note) {
+            sendJson(res, 400, { error: "Key 备注不能为空。" });
+            return;
+          }
+          key.note = note;
+        }
+        if (body.apiKey) key.apiKey = String(body.apiKey).trim();
+        if (body.active) profile.activeKeyId = key.id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || profile.keys[0];
+        profile.activeKeyId = activeKey?.id || "";
+        profile.apiKey = activeKey?.apiKey || "";
+        profile.keyNote = activeKey?.note || "";
+        config.thirdOpenAIProfiles = profiles;
+        await saveConfig(config);
+        log(`第三方 GPT Key 已更新: ${profile.name} / ${key.note}`);
+        sendJson(res, 200, { saved: true, keyId: key.id, profile: publicThirdOpenAIProfiles(config).find((item) => item.id === profileId) });
+        return;
+      }
+
+      if (req.method === "DELETE" && keyId) {
+        const keyIndex = profile.keys.findIndex((item) => item.id === keyId);
+        if (keyIndex === -1) {
+          sendJson(res, 404, { error: "API Key 不存在。" });
+          return;
+        }
+        if (profile.keys.length <= 1) {
+          sendJson(res, 400, { error: "一个配置至少需要保留一个 API Key。" });
+          return;
+        }
+        const [removedKey] = profile.keys.splice(keyIndex, 1);
+        if (profile.activeKeyId === keyId) profile.activeKeyId = profile.keys[0].id;
+        const activeKey = profile.keys.find((item) => item.id === profile.activeKeyId) || profile.keys[0];
+        profile.apiKey = activeKey.apiKey;
+        profile.keyNote = activeKey.note;
+        config.thirdOpenAIProfiles = profiles;
+        await saveConfig(config);
+        log(`第三方 GPT Key 已删除: ${profile.name} / ${removedKey.note}`);
+        sendJson(res, 200, { deleted: true, profile: publicThirdOpenAIProfiles(config).find((item) => item.id === profileId) });
+        return;
+      }
+
+      sendJson(res, 405, { error: "不支持的 Key 操作。" });
       return;
     }
 
@@ -953,10 +1247,29 @@ async function handleRequest(req, res) {
         const id = String(body.id || generateId()).trim();
         const existingIndex = profiles.findIndex((profile) => profile.id === id);
         const existing = existingIndex >= 0 ? profiles[existingIndex] : null;
+        const keys = existing?.keys.map((key) => ({ ...key })) || [];
+        const incomingApiKey = String(body.apiKey || "").trim();
+        const incomingKeyNote = String(body.keyNote || "默认 Key").trim();
+        let activeKeyId = existing?.activeKeyId || keys[0]?.id || "";
+        if (incomingApiKey) {
+          const activeKey = keys.find((key) => key.id === activeKeyId);
+          if (activeKey) {
+            activeKey.apiKey = incomingApiKey;
+            if (body.keyNote) activeKey.note = incomingKeyNote;
+          } else {
+            const newKey = { id: generateId(), note: incomingKeyNote, apiKey: incomingApiKey };
+            keys.push(newKey);
+            activeKeyId = newKey.id;
+          }
+        }
+        const selectedKey = keys.find((key) => key.id === activeKeyId) || keys[0] || null;
         const profile = {
           id,
           name: String(body.name || existing?.name || `第三方 GPT ${profiles.length + 1}`).trim(),
-          apiKey: String(body.apiKey || existing?.apiKey || "").trim(),
+          keys,
+          activeKeyId: selectedKey?.id || "",
+          apiKey: selectedKey?.apiKey || "",
+          keyNote: selectedKey?.note || "",
           baseUrl: String(body.baseUrl || existing?.baseUrl || YUNWU_BASE_URL).trim().replace(/\/+$/, ""),
           model: String(body.model || existing?.model || "gpt-image-2").trim(),
           mode: body.mode === "tasks" ? "tasks" : "edits",
@@ -964,7 +1277,7 @@ async function handleRequest(req, res) {
             ? String(body.resolution || existing?.resolution || "2k").toLowerCase()
             : "2k",
         };
-        if (!profile.name || !profile.apiKey || !profile.baseUrl || !profile.model) {
+        if (!profile.name || !profile.keys.length || !profile.apiKey || !profile.baseUrl || !profile.model) {
           sendJson(res, 400, { error: "名称、API key、Base URL 和模型名不能为空。" });
           return;
         }
@@ -1013,7 +1326,14 @@ async function handleRequest(req, res) {
           title: s.title || "",
           prompt: s.prompt,
           provider: s.provider,
+          providerName: s.providerName || "",
+          model: s.model || "",
+          configuration: s.configuration || null,
           success: s.success,
+          error: s.error || "",
+          durationMs: s.durationMs || 0,
+          inputCount: Array.isArray(s.inputPaths) ? s.inputPaths.length : 0,
+          outputCount: Array.isArray(s.outputPaths) ? s.outputPaths.length : 0,
           outputThumb: s.outputThumb || "",
           thumbnailPaths: s.thumbnailPaths || [],
         }));
@@ -1039,6 +1359,9 @@ async function handleRequest(req, res) {
           if (!session) return false;
           if (body.title !== undefined) session.title = body.title;
           if (body.prompt !== undefined) session.prompt = body.prompt;
+          if (body.durationMs !== undefined) session.durationMs = Math.max(0, Number(body.durationMs) || 0);
+          if (body.success !== undefined) session.success = Boolean(body.success);
+          if (body.error !== undefined) session.error = String(body.error || "");
           return true;
         });
         if (!updated) {
@@ -1055,9 +1378,12 @@ async function handleRequest(req, res) {
           id: generateId(),
           createdAt: new Date().toISOString(),
           title: body.title || "新会话",
-          prompt: "",
+          prompt: String(body.prompt || ""),
           provider: "",
           model: "",
+          providerName: "",
+          configuration: null,
+          durationMs: 0,
           success: false,
           error: "",
           inputPaths: [],
@@ -1141,18 +1467,21 @@ async function handleRequest(req, res) {
       const config = await readConfig();
 
       const body = await readJson(req);
+      const requestStartedAt = Date.now();
       const provider = String(body.provider || "xai").trim();
       const prompt = String(body.prompt || "").trim();
       const selectedThirdOpenAI = resolveThirdOpenAIProfile(config, provider);
+      const selectedThirdGrok = resolveThirdGrokProfile(config, provider);
       const requestedThirdOpenAIId = thirdOpenAIProfileId(provider);
-      const isGrokProvider = provider === "xai" || provider === "third-grok";
+      const requestedThirdGrokId = thirdGrokProfileId(provider);
+      const isGrokProvider = provider === "xai" || provider === "third-grok" || Boolean(selectedThirdGrok);
       const inputLimit = selectedThirdOpenAI?.mode === "tasks" ? 16 : isGrokProvider ? 3 : 10;
       const imageUrls = Array.isArray(body.imageUrls)
         ? body.imageUrls.map((value) => String(value || "").trim()).filter(Boolean)
         : [String(body.imageUrl || "").trim()].filter(Boolean);
       imageUrls.splice(inputLimit);
       const imageUrl = imageUrls[0] || "";
-      const model = String(body.model || "grok-imagine-image-quality").trim();
+      const model = selectedThirdGrok?.model || String(body.model || "grok-imagine-image-quality").trim();
       const openaiModel = String(body.openaiModel || "gpt-image-2").trim();
       const effectiveOpenAIModel = selectedThirdOpenAI?.model || openaiModel;
       const n = Math.max(1, Math.min(4, Number(body.n || 1)));
@@ -1168,13 +1497,42 @@ async function handleRequest(req, res) {
 
       const displayProvider = provider === "xai"
         ? "xAI"
-        : provider === "third-grok"
+        : selectedThirdGrok?.name || (provider === "third-grok"
           ? "第三方Grok"
-          : selectedThirdOpenAI?.name || (provider === "yunwu" ? "第三方OpenAI" : "OpenAI");
+          : selectedThirdOpenAI?.name || (provider === "yunwu" ? "第三方OpenAI" : "OpenAI"));
+      const providerBaseUrl = selectedThirdOpenAI?.baseUrl
+        || selectedThirdGrok?.baseUrl
+        || (provider === "yunwu" ? config.yunwuBaseUrl || YUNWU_BASE_URL
+          : provider === "third-grok" ? config.thirdGrokBaseUrl || XAI_BASE_URL
+            : provider === "xai" ? XAI_BASE_URL : "https://api.openai.com/v1");
+      const submittedConfiguration = {
+        provider,
+        providerName: displayProvider,
+        apiBaseUrl: providerBaseUrl,
+        apiMode: selectedThirdOpenAI?.mode || (isGrokProvider ? "grok-edit" : "edits"),
+        keyId: selectedThirdOpenAI?.activeKeyId || selectedThirdGrok?.activeKeyId || "",
+        keyNote: selectedThirdOpenAI?.keyNote || selectedThirdGrok?.keyNote || "",
+        keyMasked: selectedThirdOpenAI || selectedThirdGrok ? maskKey((selectedThirdOpenAI || selectedThirdGrok).apiKey) : "",
+        model: isGrokProvider ? model : effectiveOpenAIModel,
+        size,
+        quality,
+        outputFormat,
+        background,
+        moderation,
+        count: n,
+        aspectRatio,
+        resolution: selectedThirdOpenAI?.mode === "tasks" ? selectedThirdOpenAI.resolution : resolution,
+        partialImages,
+        inputFidelity,
+      };
       log(`图片编辑开始 提供商=${displayProvider} 模型=${isGrokProvider ? model : effectiveOpenAIModel} 图片数=${imageUrls.length} n=${n} prompt="${prompt.slice(0, 60)}${prompt.length > 60 ? "..." : ""}"`);
 
       if (requestedThirdOpenAIId && !selectedThirdOpenAI) {
         sendJson(res, 400, { error: "选择的第三方 GPT 配置不存在，请重新选择。" });
+        return;
+      }
+      if (requestedThirdGrokId && !selectedThirdGrok) {
+        sendJson(res, 400, { error: "选择的第三方 Grok 配置不存在，请重新选择。" });
         return;
       }
 
@@ -1193,7 +1551,11 @@ async function handleRequest(req, res) {
           title: prompt.slice(0, 50),
           prompt,
           provider,
+          providerName: displayProvider,
           model: isGrokProvider ? model : effectiveOpenAIModel,
+          configuration: submittedConfiguration,
+          error: "",
+          success: false,
         });
       }
 
@@ -1260,6 +1622,7 @@ async function handleRequest(req, res) {
             success: false,
             error: errMsg,
             inputPaths: savedInputPaths,
+            durationMs: Date.now() - requestStartedAt,
           });
           sendJson(res, openaiResponse.status, {
             error: errMsg,
@@ -1300,16 +1663,17 @@ async function handleRequest(req, res) {
           outputPaths: savedOutputs,
           outputThumb: openaiThumb,
           thumbnailPaths: openaiThumbs,
+          durationMs: Date.now() - requestStartedAt,
         });
         log(`OpenAI 编辑成功 输出数=${savedOutputs.length} 输入=${savedInputPath}`);
         sendJson(res, 200, data);
         return;
       }
 
-      const xaiApiKey = provider === "third-grok" ? config.thirdGrokApiKey : config.apiKey;
-      const xaiProviderName = provider === "third-grok" ? "第三方 Grok" : "xAI";
-      const xaiEndpoint = provider === "third-grok"
-        ? imageEditEndpointFromBase(config.thirdGrokBaseUrl, XAI_BASE_URL)
+      const xaiApiKey = selectedThirdGrok?.apiKey || (provider === "third-grok" ? config.thirdGrokApiKey : config.apiKey);
+      const xaiProviderName = selectedThirdGrok?.name || (provider === "third-grok" ? "第三方 Grok" : "xAI");
+      const xaiEndpoint = selectedThirdGrok || provider === "third-grok"
+        ? imageEditEndpointFromBase(selectedThirdGrok?.baseUrl || config.thirdGrokBaseUrl, XAI_BASE_URL)
         : XAI_EDIT_URL;
 
       if (!xaiApiKey) {
@@ -1380,6 +1744,7 @@ async function handleRequest(req, res) {
           success: false,
           error: errMsg,
           inputPaths: savedInputPaths,
+          durationMs: Date.now() - requestStartedAt,
         });
         sendJson(res, xaiResponse.status, {
           error: errMsg,
@@ -1421,6 +1786,7 @@ async function handleRequest(req, res) {
           success: false,
           error: errMsg,
           inputPaths: savedInputPaths,
+          durationMs: Date.now() - requestStartedAt,
         });
         sendJson(res, responseStatus, {
           error: errMsg,
@@ -1446,6 +1812,7 @@ async function handleRequest(req, res) {
         outputPaths: savedOutputs,
         outputThumb: xaiThumb,
         thumbnailPaths: xaiThumbs,
+        durationMs: Date.now() - requestStartedAt,
       });
       log(`xAI 编辑成功 输出数=${savedOutputs.length} 输入=${savedInputPath}`);
       sendJson(res, 200, data);
@@ -1486,6 +1853,8 @@ async function handleRequest(req, res) {
         const apiKey = selectedThirdOpenAI?.apiKey || (isYunwu ? config.yunwuApiKey : config.openaiApiKey);
         const baseUrl = selectedThirdOpenAI?.baseUrl
           || (isYunwu ? (config.yunwuBaseUrl || YUNWU_BASE_URL).replace(/\/+$/, "") : "https://api.openai.com/v1");
+        const providerName = selectedThirdOpenAI?.name || (isYunwu ? "第三方 OpenAI" : "OpenAI");
+        const sessionId = String(body.sessionId || "").trim();
 
         if (!apiKey) {
           sendJson(res, 400, { error: `请先保存 ${selectedThirdOpenAI?.name || (isYunwu ? "第三方" : "OpenAI")} API key。` });
@@ -1496,6 +1865,37 @@ async function handleRequest(req, res) {
         for (let i = 0; i < imageUrls.length; i++) {
           const prefix = imageUrls.length > 1 ? `batch-input-${i + 1}` : "batch-input";
           savedInputPaths.push(await saveImageReference(imageUrls[i], INPUT_DIR, prefix));
+        }
+
+        if (sessionId) {
+          await updateSession(sessionId, {
+            title: `批量 ${prompts.length} 条`,
+            prompt: prompts.join(" | "),
+            provider,
+            providerName,
+            model,
+            inputPaths: savedInputPaths,
+            success: false,
+            error: "",
+            configuration: {
+              provider,
+              providerName,
+              apiBaseUrl: baseUrl,
+              apiMode: "batch",
+              keyId: selectedThirdOpenAI?.activeKeyId || "",
+              keyNote: selectedThirdOpenAI?.keyNote || "",
+              keyMasked: selectedThirdOpenAI ? maskKey(selectedThirdOpenAI.apiKey) : "",
+              model,
+              size,
+              quality,
+              outputFormat,
+              background,
+              moderation,
+              count: n,
+              partialImages,
+              inputFidelity,
+            },
+          });
         }
 
         const jsonlLines = [];
@@ -1534,14 +1934,8 @@ async function handleRequest(req, res) {
 
           log(`批量任务已创建 batchId=${batch.id} 提示词数=${prompts.length} 状态=${batch.status}`);
 
-          const sessionId = String(body.sessionId || "").trim();
           if (sessionId) {
             await updateSession(sessionId, {
-              title: `批量 ${prompts.length} 条`,
-              prompt: prompts.join(" | "),
-              provider,
-              model,
-              inputPaths: savedInputPaths,
               batchId: batch.id,
               batchStatus: batch.status,
             });
@@ -1617,6 +2011,7 @@ async function handleRequest(req, res) {
               session.outputPaths = savedOutputs;
               session.outputThumb = thumb;
               session.thumbnailPaths = thumbs;
+              session.durationMs = Math.max(0, Date.now() - new Date(session.createdAt || Date.now()).getTime());
               return true;
             });
 
@@ -1626,8 +2021,15 @@ async function handleRequest(req, res) {
 
           await mutateSessions((sessions) => {
             const session = sessions.find((s) => s.batchId === batchId);
-            if (!session || session.batchStatus === batch.status) return false;
+            if (!session) return false;
+            const terminalFailure = ["failed", "expired", "cancelled"].includes(batch.status);
+            if (session.batchStatus === batch.status && !terminalFailure) return false;
             session.batchStatus = batch.status;
+            if (terminalFailure) {
+              session.success = false;
+              session.error = batch.error?.message || `批量任务${batch.status}`;
+              session.durationMs = Math.max(0, Date.now() - new Date(session.createdAt || Date.now()).getTime());
+            }
             return true;
           });
 
@@ -1648,6 +2050,7 @@ async function handleRequest(req, res) {
   }
 }
 
-http.createServer(handleRequest).listen(PORT, "127.0.0.1", () => {
+http.createServer(handleRequest).listen(PORT, HOST, () => {
   console.log(`Grok image editor is running at http://127.0.0.1:${PORT}`);
+  if (HOST === "0.0.0.0") console.log(`Mobile: open http://<computer-lan-ip>:${PORT}/mobile.html`);
 });
