@@ -860,6 +860,10 @@
               <option value="10">10</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label for="retryOnSuccess">成功后继续重试</label>
+            <input class="retry-toggle" id="retryOnSuccess" type="checkbox" />
+          </div>
         </div>
       </section>
     </div>
@@ -964,6 +968,7 @@
       const openaiInputFidelityInput = document.querySelector("#openaiInputFidelity");
       const autoRetryInput = document.querySelector("#autoRetry");
       const retryCountInput = document.querySelector("#retryCount");
+      const retryOnSuccessInput = document.querySelector("#retryOnSuccess");
       const editImage = document.querySelector("#editImage");
       const stopButton = document.querySelector("#stopButton");
       const timeoutInput = document.querySelector("#timeout");
@@ -994,18 +999,23 @@
 
       function syncRetrySettings() {
         retryCountInput.disabled = !autoRetryInput.checked;
+        retryOnSuccessInput.disabled = !autoRetryInput.checked;
         localStorage.setItem("desktop_auto_retry", String(autoRetryInput.checked));
         localStorage.setItem("desktop_retry_count", retryCountInput.value);
+        localStorage.setItem("desktop_retry_on_success", String(retryOnSuccessInput.checked));
       }
 
       autoRetryInput.checked = localStorage.getItem("desktop_auto_retry") === "true";
+      retryOnSuccessInput.checked = localStorage.getItem("desktop_retry_on_success") === "true";
       retryCountInput.value = localStorage.getItem("desktop_retry_count") || "3";
       if (![...retryCountInput.options].some((option) => option.value === retryCountInput.value)) {
         retryCountInput.value = "3";
       }
       retryCountInput.disabled = !autoRetryInput.checked;
+      retryOnSuccessInput.disabled = !autoRetryInput.checked;
       autoRetryInput.addEventListener("change", syncRetrySettings);
       retryCountInput.addEventListener("change", syncRetrySettings);
+      retryOnSuccessInput.addEventListener("change", syncRetrySettings);
 
       function waitForRetry(ms, signal) {
         return new Promise((resolve, reject) => {
@@ -1038,23 +1048,64 @@
 
       async function fetchEditWithRetry(url, options) {
         const maxRetries = autoRetryInput.checked ? Number(retryCountInput.value) : 0;
+        const retryOnSuccess = autoRetryInput.checked && retryOnSuccessInput.checked;
         let retryNumber = 0;
+        let lastSuccessfulResponse = null;
+
+        function restoreSuccessfulResponse() {
+          if (!lastSuccessfulResponse) return null;
+          return new Response(lastSuccessfulResponse.body, {
+            status: lastSuccessfulResponse.status,
+            statusText: lastSuccessfulResponse.statusText,
+            headers: lastSuccessfulResponse.headers,
+          });
+        }
 
         while (true) {
           let response;
           try {
             response = await fetch(url, options);
           } catch (error) {
-            if (error.name === "AbortError" || retryNumber >= maxRetries) throw error;
+            if (error.name === "AbortError") throw error;
+            if (retryNumber >= maxRetries) {
+              const successfulResponse = restoreSuccessfulResponse();
+              if (successfulResponse) return successfulResponse;
+              throw error;
+            }
           }
 
           const retryableResponse = response && (response.status === 429 || response.status >= 500);
-          if (response && (!retryableResponse || retryNumber >= maxRetries)) return response;
+          const successfulResponse = response?.ok;
+          const shouldRepeatSuccess = successfulResponse && retryOnSuccess && retryNumber < maxRetries;
+
+          if (response && !response.ok && !retryableResponse && lastSuccessfulResponse) {
+            return restoreSuccessfulResponse();
+          }
+          if (response && !retryableResponse && !shouldRepeatSuccess) return response;
+          if (retryableResponse && retryNumber >= maxRetries) {
+            const previousSuccess = restoreSuccessfulResponse();
+            return previousSuccess || response;
+          }
+
+          if (shouldRepeatSuccess) {
+            lastSuccessfulResponse = {
+              body: await response.text(),
+              status: response.status,
+              statusText: response.statusText,
+              headers: [...response.headers.entries()],
+            };
+          } else if (response?.body) {
+            await response.body.cancel().catch(() => {});
+          }
 
           retryNumber += 1;
           const delay = retryDelay(response, retryNumber);
-          const reason = response ? `HTTP ${response.status}` : "网络连接失败";
-          setMessage(`${reason}，${(delay / 1000).toFixed(1)} 秒后自动重试 (${retryNumber}/${maxRetries})...`, true);
+          const reason = shouldRepeatSuccess
+            ? "生成成功，继续生成"
+            : response
+              ? `HTTP ${response.status}`
+              : "网络连接失败";
+          setMessage(`${reason}，${(delay / 1000).toFixed(1)} 秒后自动重试 (${retryNumber}/${maxRetries})...`, !shouldRepeatSuccess);
           await waitForRetry(delay, options.signal);
         }
       }
