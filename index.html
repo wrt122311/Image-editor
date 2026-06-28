@@ -1805,7 +1805,10 @@
         batchPollId: null,
         currentBatchId: null,
         currentSessionId: null,
+        pendingEditStarts: 0,
       };
+
+      const MAX_CONCURRENT_EDITS = 10;
 
       const DEFAULT_PROMPT_PRESETS = [
         { number: 1, text: "全身照，自然站立，正面视角，纯白背景，保持画风不变。" },
@@ -3363,7 +3366,15 @@
           return;
         }
 
+        const activeCount = Object.keys(state.activeEdits).length + state.pendingEditStarts;
+        if (activeCount >= MAX_CONCURRENT_EDITS) {
+          setMessage(`最多同时运行 ${MAX_CONCURRENT_EDITS} 个任务，请等待任一任务完成后再提交。`, true);
+          return;
+        }
+
+        state.pendingEditStarts += 1;
         const currentSid = await createSubmissionSession(promptInput.value.trim());
+        state.pendingEditStarts = Math.max(0, state.pendingEditStarts - 1);
         if (!currentSid) return;
         state.currentSessionId = currentSid;
         clearResult();
