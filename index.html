@@ -1742,8 +1742,6 @@
         currentSessionId: null,
       };
 
-      const MAX_CONCURRENT_EDITS = 5;
-
       const DEFAULT_PROMPT_PRESETS = [
         { number: 1, text: "全身照，自然站立，正面视角，纯白背景，保持画风不变。" },
         { number: 2, text: "全身照，三分之四视角站立，一只手轻扶头发，纯白背景，保持画风不变。" },
@@ -2259,7 +2257,10 @@
               : response
                 ? `HTTP ${response.status}`
                 : "网络连接失败";
-          const promptNote = retryPreset ? `，改用第${retryPreset.number}张提示词` : "";
+          const retryPresetIndex = retryPreset
+            ? promptPresets.findIndex((preset) => preset.id === retryPreset.id) + 1
+            : 0;
+          const promptNote = retryPresetIndex > 0 ? `，改用第${retryPresetIndex}张提示词` : "";
           setMessage(`${reason}${promptNote}，${(delay / 1000).toFixed(1)} 秒后自动重试 (${retryNumber}/${maxRetries})...`, !shouldRepeatSuccess);
           await waitForRetry(delay, options.signal);
         }
@@ -3174,12 +3175,6 @@
           return;
         }
 
-        const activeCount = Object.keys(state.activeEdits).length;
-        if (activeCount >= MAX_CONCURRENT_EDITS) {
-          setMessage(`已有 ${activeCount} 个任务正在处理，请等待完成后再提交。`, true);
-          return;
-        }
-
         const currentSid = await createSubmissionSession(promptInput.value.trim());
         if (!currentSid) return;
         state.currentSessionId = currentSid;
@@ -3842,10 +3837,6 @@
       }
 
       function retrySession(detail) {
-        if (Object.keys(state.activeEdits).length || state.currentBatchId) {
-          setMessage("当前已有任务正在生成，请等待完成后再重试。", true);
-          return;
-        }
         if (!detail.inputPaths?.length) {
           setMessage("该记录没有可用的参考图，无法重新生成。", true);
           return;
@@ -3857,7 +3848,7 @@
         batchMode.value = isBatch ? "batch" : "single";
         if (isBatch) promptInput.value = String(detail.prompt || "").split(" | ").join("\n");
         batchMode.dispatchEvent(new Event("change"));
-        setMessage("正在使用原配置重新提交...");
+        setMessage("已创建新的重试任务，原任务将继续运行...");
         window.setTimeout(() => editImage.click(), 0);
       }
 
