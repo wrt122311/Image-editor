@@ -307,6 +307,8 @@
         gap: 8px;
       }
 
+      .prompt-preset-picker { position: relative; min-width: 0; }
+
       .prompt-preset {
         width: 100%;
         min-height: 40px;
@@ -319,7 +321,37 @@
         outline: none;
         text-overflow: ellipsis;
         white-space: nowrap;
+        text-align: left;
       }
+
+      .prompt-preset-menu {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 7px);
+        left: 0;
+        z-index: 35;
+        max-height: min(520px, 60dvh);
+        overflow-y: auto;
+        padding: 6px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: var(--shadow);
+      }
+      .prompt-preset-menu[hidden] { display: none; }
+      .prompt-preset-option {
+        display: block;
+        width: 100%;
+        min-height: 40px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        overflow-wrap: anywhere;
+        text-align: left;
+        line-height: 1.45;
+        background: transparent;
+      }
+      .prompt-preset-option:hover,
+      .prompt-preset-option.selected { color: #176f60; background: #e8f4f1; }
 
       .prompt-preset-manage {
         width: 40px;
@@ -368,6 +400,16 @@
       .prompt-order { color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
       .prompt-manager-text { min-width: 0; line-height: 1.55; overflow-wrap: anywhere; }
       .prompt-delete { color: var(--danger); background: transparent; }
+      .prompt-edit-modal { width: min(660px, 100%); border-radius: 8px; }
+      .prompt-edit-body { padding: 12px 28px 28px; }
+      .prompt-edit-body textarea {
+        min-height: 150px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+      .prompt-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
       .toolbar {
         grid-column: 1 / -1;
@@ -1157,8 +1199,12 @@
       :root[data-theme="dark"] .setting-row select,
       :root[data-theme="dark"] .setting-row input { color: var(--ink); background: #20262a; border-color: var(--line); }
       :root[data-theme="dark"] .prompt-preset-manage,
+      :root[data-theme="dark"] .prompt-preset-menu,
+      :root[data-theme="dark"] .prompt-edit-body textarea,
       :root[data-theme="dark"] .prompt-manager-add textarea,
       :root[data-theme="dark"] .prompt-manager-item { color: var(--ink); background: #20262a; border-color: var(--line); }
+      :root[data-theme="dark"] .prompt-preset-option:hover,
+      :root[data-theme="dark"] .prompt-preset-option.selected { color: #67d2b8; background: #183c34; }
       :root[data-theme="dark"] button { color: var(--ink); background: #272e33; }
       :root[data-theme="dark"] button:hover { background: #323a40; }
       :root[data-theme="dark"] .send { color: #fff; background: #21836e; }
@@ -1260,6 +1306,7 @@
         .prompt-manager-modal .modal-header { padding: 18px 16px 8px; }
         .prompt-manager-modal .modal-header h2 { font-size: 22px; }
         .prompt-manager-header-actions button { min-height: 38px; padding: 0 10px; }
+        .prompt-edit-body { padding: 10px 16px 20px; }
       }
 
       @media (max-width: 520px) {
@@ -1362,9 +1409,11 @@
           <div class="input-strip" id="sourceList" hidden></div>
         </div>
         <div class="prompt-preset-row">
-          <select class="prompt-preset" id="promptPreset">
-            <option value="">选择提示词...</option>
-          </select>
+          <div class="prompt-preset-picker">
+            <button type="button" class="prompt-preset" id="promptPresetButton" aria-haspopup="listbox" aria-expanded="false">选择提示词...</button>
+            <div class="prompt-preset-menu" id="promptPresetMenu" role="listbox" hidden></div>
+            <select id="promptPreset" hidden tabindex="-1" aria-hidden="true"><option value="">选择提示词...</option></select>
+          </div>
           <button type="button" class="prompt-preset-manage" id="managePromptPresets" title="管理提示词">☷</button>
         </div>
         <textarea id="prompt" placeholder="What do you want to see..."></textarea>
@@ -1656,6 +1705,22 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="promptEditModal" hidden>
+      <section class="modal prompt-edit-modal" role="dialog" aria-modal="true" aria-label="编辑提示词">
+        <div class="modal-header">
+          <h2>编辑提示词</h2>
+          <button type="button" id="closePromptEdit">关闭</button>
+        </div>
+        <div class="prompt-edit-body">
+          <textarea id="promptEditText"></textarea>
+          <div class="prompt-edit-actions">
+            <button type="button" id="cancelPromptEdit">取消</button>
+            <button type="button" id="savePromptEdit">保存修改</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div class="session-detail-backdrop" id="sessionDetailModal" hidden>
       <section class="session-detail-dialog" role="dialog" aria-modal="true" aria-label="会话详情">
         <div class="session-detail-preview" id="sessionDetailPreview"></div>
@@ -1838,6 +1903,8 @@
       const promptBox = document.querySelector(".prompt-box");
       const promptInput = document.querySelector("#prompt");
       const promptPresetInput = document.querySelector("#promptPreset");
+      const promptPresetButton = document.querySelector("#promptPresetButton");
+      const promptPresetMenu = document.querySelector("#promptPresetMenu");
       const managePromptPresets = document.querySelector("#managePromptPresets");
       const promptManagerModal = document.querySelector("#promptManagerModal");
       const closePromptManager = document.querySelector("#closePromptManager");
@@ -1845,6 +1912,11 @@
       const customPromptPreset = document.querySelector("#customPromptPreset");
       const addPromptPreset = document.querySelector("#addPromptPreset");
       const promptManagerList = document.querySelector("#promptManagerList");
+      const promptEditModal = document.querySelector("#promptEditModal");
+      const promptEditText = document.querySelector("#promptEditText");
+      const closePromptEdit = document.querySelector("#closePromptEdit");
+      const cancelPromptEdit = document.querySelector("#cancelPromptEdit");
+      const savePromptEdit = document.querySelector("#savePromptEdit");
       const modelInput = document.querySelector("#model");
       const customGrokModelInput = document.querySelector("#customGrokModel");
       const openaiModelInput = document.querySelector("#openaiModel");
@@ -1906,6 +1978,66 @@
         localStorage.setItem(PROMPT_PRESETS_STORAGE_KEY, JSON.stringify(promptPresets));
       }
 
+      let promptMenuCloseTimer = 0;
+      let editingPromptPresetId = "";
+      function closePromptPresetMenu() {
+        window.clearTimeout(promptMenuCloseTimer);
+        promptPresetMenu.hidden = true;
+        promptPresetButton.setAttribute("aria-expanded", "false");
+      }
+
+      function syncPromptPresetButton() {
+        const index = promptPresets.findIndex((preset) => preset.text === promptPresetInput.value);
+        promptPresetButton.textContent = index >= 0
+          ? `第${index + 1}张：${promptPresets[index].text}`
+          : "选择提示词...";
+        promptPresetButton.title = index >= 0 ? promptPresets[index].text : "选择提示词";
+      }
+
+      function openPromptPresetEditor(id) {
+        const preset = promptPresets.find((item) => item.id === id);
+        if (!preset) return;
+        editingPromptPresetId = id;
+        promptEditText.value = preset.text;
+        closePromptPresetMenu();
+        promptEditModal.hidden = false;
+        window.setTimeout(() => promptEditText.focus(), 0);
+      }
+
+      function renderPromptPresetMenu() {
+        promptPresetMenu.innerHTML = "";
+        if (!promptPresets.length) {
+          const empty = document.createElement("div");
+          empty.className = "prompt-manager-empty";
+          empty.textContent = "暂无提示词";
+          promptPresetMenu.appendChild(empty);
+          return;
+        }
+        promptPresets.forEach((preset, index) => {
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "prompt-preset-option";
+          option.classList.toggle("selected", preset.text === promptPresetInput.value);
+          option.dataset.id = preset.id;
+          option.setAttribute("role", "option");
+          option.textContent = `第${index + 1}张：${preset.text}`;
+          option.addEventListener("click", () => {
+            promptPresetInput.value = preset.text;
+            promptPresetInput.dispatchEvent(new Event("change"));
+            [...promptPresetMenu.querySelectorAll(".prompt-preset-option")]
+              .forEach((item) => item.classList.toggle("selected", item.dataset.id === preset.id));
+            window.clearTimeout(promptMenuCloseTimer);
+            promptMenuCloseTimer = window.setTimeout(closePromptPresetMenu, 260);
+          });
+          option.addEventListener("dblclick", (event) => {
+            event.preventDefault();
+            window.clearTimeout(promptMenuCloseTimer);
+            openPromptPresetEditor(preset.id);
+          });
+          promptPresetMenu.appendChild(option);
+        });
+      }
+
       function renderPromptPresetSelect(selectedText = promptPresetInput.value) {
         promptPresetInput.replaceChildren(new Option("选择提示词...", ""));
         promptPresets.forEach((preset, index) => {
@@ -1915,6 +2047,8 @@
           promptPresetInput.appendChild(option);
         });
         promptPresetInput.value = promptPresets.some((preset) => preset.text === selectedText) ? selectedText : "";
+        syncPromptPresetButton();
+        renderPromptPresetMenu();
       }
 
       function savePromptOrderFromList() {
@@ -1960,6 +2094,8 @@
           const text = document.createElement("div");
           text.className = "prompt-manager-text";
           text.textContent = preset.text;
+          text.title = "双击编辑";
+          text.addEventListener("dblclick", () => openPromptPresetEditor(preset.id));
           const remove = document.createElement("button");
           remove.type = "button";
           remove.className = "prompt-delete";
@@ -2035,6 +2171,20 @@
 
       renderPromptPresetSelect();
 
+      promptPresetButton.addEventListener("click", () => {
+        const opening = promptPresetMenu.hidden;
+        if (opening) {
+          renderPromptPresetMenu();
+          promptPresetMenu.hidden = false;
+          promptPresetButton.setAttribute("aria-expanded", "true");
+        } else {
+          closePromptPresetMenu();
+        }
+      });
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest(".prompt-preset-picker")) closePromptPresetMenu();
+      });
+
       managePromptPresets.addEventListener("click", () => {
         renderPromptManagerList();
         promptManagerModal.hidden = false;
@@ -2067,16 +2217,45 @@
         renderPromptManagerList();
         setMessage("已恢复默认提示词。");
       });
+      function closePromptEditor() {
+        promptEditModal.hidden = true;
+        editingPromptPresetId = "";
+      }
+      closePromptEdit.addEventListener("click", closePromptEditor);
+      cancelPromptEdit.addEventListener("click", closePromptEditor);
+      promptEditModal.addEventListener("click", (event) => {
+        if (event.target === promptEditModal) closePromptEditor();
+      });
+      savePromptEdit.addEventListener("click", () => {
+        const preset = promptPresets.find((item) => item.id === editingPromptPresetId);
+        const nextText = promptEditText.value.trim();
+        if (!preset || !nextText) return;
+        if (promptPresets.some((item) => item.id !== preset.id && item.text === nextText)) {
+          setMessage("这条提示词已经存在。", true);
+          return;
+        }
+        const previousText = preset.text;
+        preset.text = nextText;
+        if (promptInput.value === previousText) promptInput.value = nextText;
+        savePromptPresets();
+        renderPromptPresetSelect(promptPresetInput.value === previousText ? nextText : promptPresetInput.value);
+        renderPromptManagerList();
+        closePromptEditor();
+        setMessage("提示词已更新。");
+      });
 
       promptPresetInput.addEventListener("change", () => {
-        if (!promptPresetInput.value) return;
-        promptInput.value = promptPresetInput.value;
-        promptInput.focus();
+        if (promptPresetInput.value) {
+          promptInput.value = promptPresetInput.value;
+          promptInput.focus();
+        }
+        syncPromptPresetButton();
       });
 
       promptInput.addEventListener("input", () => {
         if (promptPresetInput.value && promptInput.value !== promptPresetInput.value) {
           promptPresetInput.value = "";
+          syncPromptPresetButton();
         }
       });
       promptInput.addEventListener("keydown", (event) => {
@@ -2170,6 +2349,7 @@
       function applyPromptPreset(preset) {
         promptInput.value = preset.text;
         promptPresetInput.value = preset.text;
+        syncPromptPresetButton();
       }
 
       function isSafetyBlockText(value) {
@@ -3103,6 +3283,7 @@
         if (e.key === "Escape" && !lightbox.hidden) lightbox.hidden = true;
         if (e.key === "Escape" && !rawPanel.hidden) rawPanel.hidden = true;
         if (e.key === "Escape" && !promptManagerModal.hidden) promptManagerModal.hidden = true;
+        if (e.key === "Escape" && !promptEditModal.hidden) closePromptEditor();
       });
 
       rawToggle.addEventListener("click", () => {
