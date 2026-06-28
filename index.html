@@ -1159,17 +1159,33 @@
         .session-card-media { min-height: 180px; }
         .composer { width: calc(100vw - 20px); bottom: calc(10px + env(safe-area-inset-bottom)); }
         .toolbar { max-height: 84px; overflow-y: auto; }
-        .session-detail-backdrop { padding: 10px; }
-        .session-detail-dialog { display: block; width: 100%; height: calc(100vh - 20px); overflow-y: auto; }
-        .session-detail-preview { height: 42vh; }
-        .session-detail-panel { overflow: visible; padding: 24px 18px; }
+        .session-detail-backdrop { height: 100dvh; padding: 10px; overflow: hidden; }
+        .session-detail-dialog {
+          display: block;
+          width: 100%;
+          height: calc(100dvh - 20px);
+          max-height: calc(100dvh - 20px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scroll-padding-bottom: 90px;
+        }
+        .session-detail-preview { height: 42vh; height: 42dvh; }
+        .session-detail-panel {
+          overflow: visible;
+          padding: 24px 18px calc(34px + env(safe-area-inset-bottom));
+        }
         .detail-actions {
           position: static;
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr)) 42px;
           gap: 5px;
           overflow: visible;
-          padding-bottom: calc(2px + env(safe-area-inset-bottom));
+          margin: 18px -8px 0;
+          padding: 9px 8px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: 0 6px 20px rgba(18, 24, 30, 0.16);
         }
         .detail-actions > * {
           min-width: 0;
@@ -1179,6 +1195,7 @@
           white-space: nowrap;
         }
         .detail-actions .detail-favorite { width: 42px; }
+        :root[data-theme="dark"] .detail-actions { background: rgba(25, 30, 34, 0.97); }
       }
 
       @media (max-width: 520px) {
