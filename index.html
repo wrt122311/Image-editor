@@ -1163,8 +1163,22 @@
         .session-detail-dialog { display: block; width: 100%; height: calc(100vh - 20px); overflow-y: auto; }
         .session-detail-preview { height: 42vh; }
         .session-detail-panel { overflow: visible; padding: 24px 18px; }
-        .detail-actions { bottom: 0; flex-wrap: nowrap; overflow-x: auto; }
-        .detail-actions > * { flex: 0 0 auto; white-space: nowrap; }
+        .detail-actions {
+          position: static;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) 42px;
+          gap: 5px;
+          overflow: visible;
+          padding-bottom: calc(2px + env(safe-area-inset-bottom));
+        }
+        .detail-actions > * {
+          min-width: 0;
+          padding-right: 5px !important;
+          padding-left: 5px !important;
+          font-size: 13px;
+          white-space: nowrap;
+        }
+        .detail-actions .detail-favorite { width: 42px; }
       }
 
       @media (max-width: 520px) {
@@ -1560,10 +1574,10 @@
           </div>
           <div class="detail-meta" id="sessionDetailMeta"></div>
           <div class="detail-actions">
-            <button type="button" class="reuse-action" id="reuseSessionConfig">↩ 复用配置</button>
-            <a id="openSessionOutput" href="#" target="_blank" rel="noreferrer" hidden>打开结果</a>
-            <button type="button" id="downloadSessionOutput" hidden>↓ 下载图片</button>
-            <button type="button" class="detail-delete" id="deleteSessionDetail">删除记录</button>
+            <button type="button" class="reuse-action" id="reuseSessionConfig" title="复用配置">↩ 复用</button>
+            <a id="openSessionOutput" href="#" target="_blank" rel="noreferrer" title="打开结果" hidden>打开</a>
+            <button type="button" id="downloadSessionOutput" title="下载图片" hidden>↓ 下载</button>
+            <button type="button" class="detail-delete" id="deleteSessionDetail" title="删除记录">删除</button>
             <button type="button" class="detail-favorite" id="favoriteSessionDetail" title="收藏">☆</button>
           </div>
         </div>
