@@ -3192,14 +3192,18 @@
           rawOutput.textContent = JSON.stringify(data, null, 2);
 
           if (!response.ok) {
-            rawPanel.hidden = false;
             const errorMessage = typeof data.error === "string" ? data.error : data.error?.message || data.message || "编辑失败。";
             recordSessionOutcome(currentSid, { success: false, error: errorMessage });
             const shouldReplaceFailedPrompt = autoRetryInput.checked && retryRandomPromptInput.checked;
             if (shouldReplaceFailedPrompt && isSafetyBlockText(JSON.stringify(data))) {
               const suggestedPreset = selectRandomPromptPreset(promptInput.value);
-              applyPromptPreset(suggestedPreset);
-              setMessage(`${errorMessage} 已改用第${suggestedPreset.number}张提示词，请确认后再次点击生成。用时 ${elapsedForSession(currentSid)}`, true);
+              if (suggestedPreset) {
+                applyPromptPreset(suggestedPreset);
+                const presetIndex = promptPresets.findIndex((preset) => preset.id === suggestedPreset.id) + 1;
+                setMessage(`${errorMessage} 已改用第${presetIndex}张提示词，请确认后再次点击生成。用时 ${elapsedForSession(currentSid)}`, true);
+              } else {
+                setMessage(`${errorMessage} 用时 ${elapsedForSession(currentSid)}`, true);
+              }
             } else {
               setMessage(`${errorMessage} 用时 ${elapsedForSession(currentSid)}`, true);
             }
@@ -3211,9 +3215,8 @@
           const savedOutput = data.saved?.output;
           let displayUrl = savedOutput || (first && (first.url || first.b64_json));
           if (!displayUrl) {
-            rawPanel.hidden = false;
             recordSessionOutcome(currentSid, { success: false, error: "请求成功，但返回里没有找到图片。" });
-            setMessage(`请求成功，但返回里没有找到图片。用时 ${elapsedForSession(currentSid)}，请查看响应。`, true);
+            setMessage(`请求成功，但返回里没有找到图片。用时 ${elapsedForSession(currentSid)}。`, true);
             playNotificationSound();
             return;
           }
