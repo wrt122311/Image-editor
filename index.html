@@ -2081,6 +2081,11 @@
           promptPresetInput.value = "";
         }
       });
+      promptInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || !event.ctrlKey || event.isComposing || event.repeat) return;
+        event.preventDefault();
+        if (!editImage.disabled) editImage.click();
+      });
 
       function setMessage(text, isError = false) {
         message.textContent = text;
