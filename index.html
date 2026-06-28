@@ -1372,7 +1372,7 @@
         <button type="button" class="send stop" id="stopButton" title="停止" hidden>■</button>
         <div class="toolbar">
           <input class="file-input" id="imageFile" type="file" accept="image/png,image/jpeg,image/webp" multiple />
-          <button type="button" class="icon-button" id="attachButton" title="添加图片">＋</button>
+          <button type="button" class="icon-button" id="attachButton" title="添加或粘贴图片">＋</button>
           <button type="button" class="icon-button" id="clearInputsButton" title="清空输入">×</button>
           <button type="button" class="icon-button" id="settingsButton" title="设置">≡</button>
           <button type="button" class="icon-button" id="soundToggle" title="提示音">🔔</button>
@@ -2599,7 +2599,7 @@
         });
       }
 
-      async function loadImageFiles(files) {
+      async function loadImageFiles(files, source = "加入") {
         const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
         if (!imageFiles.length) {
           setMessage("请拖入图片文件。", true);
@@ -2619,7 +2619,7 @@
         renderSourceList();
         clearResult();
         const dropped = imageFiles.length - accepted.length;
-        setMessage(`已加入 ${accepted.length} 张图片，共 ${state.inputImages.length} 张。${dropped > 0 ? `已忽略 ${dropped} 张超限图片。` : ""}`);
+        setMessage(`已${source} ${accepted.length} 张图片，共 ${state.inputImages.length} 张。${dropped > 0 ? `已忽略 ${dropped} 张超限图片。` : ""}`);
       }
 
       function fillOpenAIProfileKeyForm(profile, preferredKeyId = null) {
@@ -3132,6 +3132,22 @@
         promptDragCounter = 0;
         promptBox.classList.remove("drag-over");
         loadImageFiles(event.dataTransfer.files);
+      });
+      promptBox.addEventListener("paste", (event) => {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return;
+        const itemImages = [...(clipboard.items || [])]
+          .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+          .map((item) => item.getAsFile())
+          .filter(Boolean);
+        const imageFiles = itemImages.length
+          ? itemImages
+          : [...(clipboard.files || [])].filter((file) => file.type.startsWith("image/"));
+        if (!imageFiles.length) return;
+        event.preventDefault();
+        loadImageFiles(imageFiles, "粘贴").catch((error) => {
+          setMessage(error.message || "读取剪贴板图片失败。", true);
+        });
       });
 
       editImage.addEventListener("click", async () => {
