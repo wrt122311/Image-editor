@@ -3235,6 +3235,12 @@
         renderSettingsPopover();
         settingsPopover.hidden = !settingsPopover.hidden;
       });
+      document.addEventListener("click", (event) => {
+        if (settingsPopover.hidden) return;
+        if (event.target === settingsButton || settingsButton.contains(event.target)) return;
+        if (settingsPopover.contains(event.target)) return;
+        settingsPopover.hidden = true;
+      });
 
       closeAdvanced.addEventListener("click", () => {
         advancedModal.hidden = true;
@@ -3284,6 +3290,7 @@
         if (e.key === "Escape" && !rawPanel.hidden) rawPanel.hidden = true;
         if (e.key === "Escape" && !promptManagerModal.hidden) promptManagerModal.hidden = true;
         if (e.key === "Escape" && !promptEditModal.hidden) closePromptEditor();
+        if (e.key === "Escape" && !settingsPopover.hidden) settingsPopover.hidden = true;
       });
 
       rawToggle.addEventListener("click", () => {
