@@ -762,6 +762,23 @@
         max-height: calc(100vh - 64px);
         object-fit: contain;
         border-radius: 6px;
+        -webkit-touch-callout: default;
+        user-select: auto;
+      }
+      .lightbox-actions {
+        position: fixed;
+        top: calc(14px + env(safe-area-inset-top));
+        right: 14px;
+        z-index: 1;
+        display: flex;
+        gap: 8px;
+      }
+      .lightbox-actions button {
+        min-height: 42px;
+        padding: 0 14px;
+        color: #20262b;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
       }
       .slot img { cursor: zoom-in; }
       .thumb img { cursor: zoom-in; }
@@ -875,6 +892,8 @@
         padding: 8px;
         object-fit: contain;
         object-position: center;
+        -webkit-touch-callout: default;
+        user-select: auto;
       }
       .card-duration {
         position: absolute;
@@ -1039,6 +1058,8 @@
         object-position: center;
         background: #f4f6f7;
         cursor: zoom-in;
+        -webkit-touch-callout: default;
+        user-select: auto;
       }
       .detail-config-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
       .detail-config-item { min-width: 0; padding: 12px 14px; border-radius: 7px; background: #f4f6f7; }
@@ -1105,6 +1126,7 @@
       :root[data-theme="dark"] .detail-reference-list img { background: #20262a; border-color: var(--line); }
       :root[data-theme="dark"] .detail-close,
       :root[data-theme="dark"] .detail-favorite { background: #272e33; }
+      :root[data-theme="dark"] .lightbox-actions button { color: var(--ink); background: rgba(39, 46, 51, 0.94); }
       :root[data-theme="dark"] .detail-delete,
       :root[data-theme="dark"] .danger-key-button { color: #ff837b; background: #3b2021; }
       :root[data-theme="dark"] .modal-backdrop { background: rgba(0, 0, 0, 0.62); }
@@ -1141,7 +1163,8 @@
         .session-detail-dialog { display: block; width: 100%; height: calc(100vh - 20px); overflow-y: auto; }
         .session-detail-preview { height: 42vh; }
         .session-detail-panel { overflow: visible; padding: 24px 18px; }
-        .detail-actions { bottom: 0; }
+        .detail-actions { bottom: 0; flex-wrap: nowrap; overflow-x: auto; }
+        .detail-actions > * { flex: 0 0 auto; white-space: nowrap; }
       }
 
       @media (max-width: 520px) {
@@ -1512,6 +1535,10 @@
 
     <div class="lightbox" id="lightbox" hidden>
       <img id="lightboxImage" alt="放大预览" />
+      <div class="lightbox-actions">
+        <button type="button" id="downloadLightboxImage" title="下载图片">↓ 下载</button>
+        <button type="button" id="closeLightbox" title="关闭预览">×</button>
+      </div>
     </div>
 
     <div class="session-detail-backdrop" id="sessionDetailModal" hidden>
@@ -1535,6 +1562,7 @@
           <div class="detail-actions">
             <button type="button" class="reuse-action" id="reuseSessionConfig">↩ 复用配置</button>
             <a id="openSessionOutput" href="#" target="_blank" rel="noreferrer" hidden>打开结果</a>
+            <button type="button" id="downloadSessionOutput" hidden>↓ 下载图片</button>
             <button type="button" class="detail-delete" id="deleteSessionDetail">删除记录</button>
             <button type="button" class="detail-favorite" id="favoriteSessionDetail" title="收藏">☆</button>
           </div>
@@ -1549,6 +1577,43 @@
         if (/^(data:|blob:|https?:)/i.test(path)) return path;
         return `${API_BASE}/api/file?path=${encodeURIComponent(path)}${bustCache ? `&t=${Date.now()}` : ""}`;
       };
+
+      function imageExtension(mime = "") {
+        if (mime.includes("webp")) return "webp";
+        if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+        if (mime.includes("gif")) return "gif";
+        return "png";
+      }
+
+      async function downloadImage(source, prefix = "generated-image") {
+        if (!source) return;
+        let objectUrl = "";
+        try {
+          const response = await fetch(source);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = `${prefix}-${new Date().toISOString().replace(/[:.]/g, "-")}.${imageExtension(blob.type)}`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 3000);
+          setMessage("图片已开始下载。");
+        } catch (error) {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          const fallback = document.createElement("a");
+          fallback.href = source;
+          fallback.target = "_blank";
+          fallback.rel = "noopener";
+          fallback.download = `${prefix}.png`;
+          document.body.appendChild(fallback);
+          fallback.click();
+          fallback.remove();
+          setMessage("浏览器未允许直接下载，已打开原图。", true);
+        }
+      }
 
       const state = {
         size: "1024x1536",
@@ -1633,6 +1698,8 @@
       const clearInputsButton = document.querySelector("#clearInputsButton");
       const lightbox = document.querySelector("#lightbox");
       const lightboxImage = document.querySelector("#lightboxImage");
+      const downloadLightboxImage = document.querySelector("#downloadLightboxImage");
+      const closeLightbox = document.querySelector("#closeLightbox");
       const dropSurface = document.querySelector("#dropSurface");
       const promptBox = document.querySelector(".prompt-box");
       const promptInput = document.querySelector("#prompt");
@@ -2704,6 +2771,14 @@
       lightboxImage.addEventListener("click", (e) => {
         e.stopPropagation();
       });
+      downloadLightboxImage.addEventListener("click", (event) => {
+        event.stopPropagation();
+        downloadImage(lightboxImage.src);
+      });
+      closeLightbox.addEventListener("click", (event) => {
+        event.stopPropagation();
+        lightbox.hidden = true;
+      });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && !lightbox.hidden) lightbox.hidden = true;
         if (e.key === "Escape" && !rawPanel.hidden) rawPanel.hidden = true;
@@ -3033,6 +3108,7 @@
       const copySessionPrompt = document.querySelector("#copySessionPrompt");
       const reuseSessionConfig = document.querySelector("#reuseSessionConfig");
       const openSessionOutput = document.querySelector("#openSessionOutput");
+      const downloadSessionOutput = document.querySelector("#downloadSessionOutput");
       const deleteSessionDetail = document.querySelector("#deleteSessionDetail");
       const favoriteSessionDetail = document.querySelector("#favoriteSessionDetail");
 
@@ -3247,6 +3323,16 @@
           favorite.title = "收藏";
           favorite.textContent = favoriteSessionIds.has(session.id) ? "★" : "☆";
           favorite.addEventListener("click", (event) => { event.stopPropagation(); toggleFavorite(session.id); });
+          const download = document.createElement("button");
+          download.type = "button";
+          download.className = "download-card";
+          download.title = "下载图片";
+          download.textContent = "↓";
+          download.hidden = !session.outputThumb;
+          download.addEventListener("click", (event) => {
+            event.stopPropagation();
+            downloadImage(fileUrl(session.outputThumb));
+          });
           const retry = document.createElement("button");
           retry.type = "button";
           retry.title = "重新生成";
@@ -3271,7 +3357,7 @@
           remove.title = "删除记录";
           remove.textContent = "×";
           remove.addEventListener("click", (event) => { event.stopPropagation(); deleteSession(session.id); });
-          actions.append(favorite, retry, reuse, remove);
+          actions.append(favorite, download, retry, reuse, remove);
           body.append(prompt, submittedAt, chips, actions);
           card.append(media, body);
           card.addEventListener("click", () => openSessionDetail(session.id));
@@ -3312,6 +3398,8 @@
         sessionDetailPrompt.textContent = detail.prompt || detail.title || "无提示词";
         sessionDetailPreview.innerHTML = "";
         openSessionOutput.hidden = true;
+        downloadSessionOutput.hidden = true;
+        downloadSessionOutput.dataset.src = "";
         if (detail.outputPaths?.length) {
           const outputUrl = fileUrl(detail.outputPaths[0]);
           const image = document.createElement("img");
@@ -3321,6 +3409,8 @@
           sessionDetailPreview.appendChild(image);
           openSessionOutput.href = outputUrl;
           openSessionOutput.hidden = false;
+          downloadSessionOutput.dataset.src = outputUrl;
+          downloadSessionOutput.hidden = false;
         } else if (sessionStatus(detail) === "running") {
           const running = document.createElement("div");
           running.className = "detail-running";
@@ -3511,6 +3601,9 @@
       });
       favoriteSessionDetail.addEventListener("click", () => {
         if (currentSessionDetail) toggleFavorite(currentSessionDetail.id);
+      });
+      downloadSessionOutput.addEventListener("click", () => {
+        downloadImage(downloadSessionOutput.dataset.src);
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !sessionDetailModal.hidden) sessionDetailModal.hidden = true;
